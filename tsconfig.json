@@ -25,9 +25,6 @@
   "files": [],
   "references": [
     {
-      "path": "./apps/plim-backend/tsconfig.app.json"
-    },
-    {
       "path": "./apps/api-gateway/tsconfig.app.json"
     }
   ]

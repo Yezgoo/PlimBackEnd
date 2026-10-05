@@ -1,0 +1,23 @@
+name: plim
+
+services:
+  postgres:
+    image: postgis/postgis:17-3.5        # Postgres 17 + PostGIS (geo queries, for Dispatch later)
+    container_name: plim-postgres
+    environment:
+      POSTGRES_USER: plim
+      POSTGRES_PASSWORD: plim_dev_password   # local dev only, never a real password
+      POSTGRES_DB: plim
+    ports:
+      - "5432:5432"                      # your PC's port : container's port
+    volumes:
+      - postgres-data:/var/lib/postgresql/data      # keeps data when the container stops
+      - ./postgres/init:/docker-entrypoint-initdb.d # SQL scripts run on first start
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U plim"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
