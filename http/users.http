@@ -1,0 +1,18 @@
+### Create a user
+POST http://localhost:3001/users
+Content-Type: application/json
+
+{
+  "auth0Id": "auth0|test-123",
+  "email": "joao@example.com",
+  "name": "João"
+}
+
+### List users
+GET http://localhost:3001/users
+
+### Get one user (paste an id from the list)
+GET http://localhost:3001/users/PASTE-ID-HERE
+
+### Invalid id → 400
+GET http://localhost:3001/users/abc
