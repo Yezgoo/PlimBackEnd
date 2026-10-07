@@ -1,4 +1,5 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { AuthGuard } from './auth.guard.js';
 
@@ -6,6 +7,8 @@ import { AuthGuard } from './auth.guard.js';
 const contextWith = (headers: Record<string, string>) =>
   ({
     switchToHttp: () => ({ getRequest: () => ({ headers }) }),
+    getHandler: () => () => {},
+    getClass: () => class {},
   }) as unknown as ExecutionContext;
 
 describe('AuthGuard', () => {
@@ -14,7 +17,14 @@ describe('AuthGuard', () => {
   beforeEach(() => {
     process.env.AUTH0_ISSUER_URL = 'https://example.eu.auth0.com/';
     process.env.AUTH0_AUDIENCE = 'https://api.plim.app';
-    guard = new AuthGuard();
+    guard = new AuthGuard(new Reflector()); // a real Reflector: no labels → not public
+  });
+
+  it('lets a @Public() route through without a token', async () => {
+    const publicReflector = { getAllAndOverride: () => true } as unknown as Reflector;
+    const publicGuard = new AuthGuard(publicReflector);
+
+    await expect(publicGuard.canActivate(contextWith({}))).resolves.toBe(true);
   });
 
   it('rejects a request without an Authorization header', async () => {
