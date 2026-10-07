@@ -16,3 +16,17 @@ GET http://localhost:3001/users/PASTE-ID-HERE
 
 ### Invalid id → 400
 GET http://localhost:3001/users/abc
+
+### Invalid email → 400
+POST http://localhost:3001/users
+Content-Type: application/json
+
+{ "auth0Id": "auth0|test-999", "email": "not-an-email" }
+
+### Unknown field → 400
+POST http://localhost:3001/users
+Content-Type: application/json
+
+{ "auth0Id": "auth0|test-998", "email": "x@example.com", "role": "admin" }
+
+### Duplicate → 409 (run the first "Create a user" request again)

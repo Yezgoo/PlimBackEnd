@@ -2,6 +2,8 @@ import { Test } from '@nestjs/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PrismaService } from '../database/prisma.service.js';
 import { UsersService } from './users.service.js';
+import { ConflictException } from '@nestjs/common';
+import { Prisma } from '../generated/prisma/client.js';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -51,4 +53,17 @@ describe('UsersService', () => {
 
     expect(await service.findOne('some-id')).toBeNull();
   });
+
+  it('create() throws 409 when the email or auth0Id already exists', async () => {
+    prismaMock.user.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+
+    await expect(service.create({ auth0Id: 'auth0|1', email: 'a@b.com' }))
+      .rejects.toBeInstanceOf(ConflictException);
+  });
+
 });
