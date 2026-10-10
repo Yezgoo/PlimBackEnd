@@ -29,6 +29,9 @@
     },
     {
       "path": "./apps/users-service/tsconfig.app.json"
+    },
+    {
+      "path": "./apps/notifications-service/tsconfig.app.json"
     }
   ]
 }

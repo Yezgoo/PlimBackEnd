@@ -19,5 +19,36 @@ services:
       timeout: 5s
       retries: 5
 
+  kafka:
+    image: apache/kafka:4.1.0            # official image; KRaft mode, so no ZooKeeper
+    container_name: plim-kafka
+    environment:
+      # one node that is both the broker (stores messages) and the controller (manages the cluster)
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # 9092: where clients connect; 9093: internal controller traffic
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092  # the address clients are told to use
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      # a single node can only keep one copy of everything
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0   # don't wait 3s before a consumer starts receiving
+      KAFKA_NUM_PARTITIONS: 3                     # default partitions for new topics
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data   # keeps topics and messages when the container stops
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
 volumes:
   postgres-data:
+  kafka-data:
