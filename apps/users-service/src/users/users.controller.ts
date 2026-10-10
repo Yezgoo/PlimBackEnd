@@ -16,6 +16,13 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  @Get('by-auth0/:auth0Id')                   // GET /users/by-auth0/<auth0 id, URL-encoded>
+  async findByAuth0Id(@Param('auth0Id') auth0Id: string) {
+    const user = await this.usersService.findByAuth0Id(auth0Id);
+    if (!user) throw new NotFoundException(`No user linked to ${auth0Id}`);
+    return user;
+  }
+
   @Get(':id')                                 // GET /users/<uuid>
   async findOne(@Param('id', ParseUUIDPipe) id: string) {
     const user = await this.usersService.findOne(id);

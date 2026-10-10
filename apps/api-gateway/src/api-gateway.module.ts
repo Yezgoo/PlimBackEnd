@@ -4,9 +4,10 @@ import { ApiGatewayController } from './api-gateway.controller.js';
 import { ApiGatewayService } from './api-gateway.service.js';
 import { AuthGuard } from './auth/auth.guard.js';
 import { HealthModule } from './health/health.module.js';
+import { UsersModule } from './users/users.module.js';
 
 @Module({
-  imports: [HealthModule],
+  imports: [HealthModule, UsersModule],
   controllers: [ApiGatewayController],
   providers: [
     ApiGatewayService,

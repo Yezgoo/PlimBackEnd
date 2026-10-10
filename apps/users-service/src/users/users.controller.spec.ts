@@ -11,6 +11,7 @@ describe('UsersController', () => {
     create: vi.fn(),
     findAll: vi.fn(),
     findOne: vi.fn(),
+    findByAuth0Id: vi.fn(),
   };
 
   beforeEach(async () => {
@@ -35,5 +36,18 @@ describe('UsersController', () => {
     usersServiceMock.findOne.mockResolvedValue(null);
 
     await expect(controller.findOne('uuid-1')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('findByAuth0Id() returns the user linked to that Auth0 id', async () => {
+    const user = { id: 'uuid-1', auth0Id: 'auth0|1' };
+    usersServiceMock.findByAuth0Id.mockResolvedValue(user);
+
+    expect(await controller.findByAuth0Id('auth0|1')).toEqual(user);
+  });
+
+  it('findByAuth0Id() throws 404 when no user is linked', async () => {
+    usersServiceMock.findByAuth0Id.mockResolvedValue(null);
+
+    await expect(controller.findByAuth0Id('auth0|1')).rejects.toBeInstanceOf(NotFoundException);
   });
 });

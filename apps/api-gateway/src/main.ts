@@ -4,6 +4,6 @@ import 'dotenv/config';
 
 async function bootstrap() {
   const app = await NestFactory.create(ApiGatewayModule);
-  await app.listen(process.env.port ?? 3001);
+  await app.listen(process.env.GATEWAY_PORT ?? 3000);
 }
 await bootstrap();

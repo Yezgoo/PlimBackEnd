@@ -26,4 +26,8 @@ export class UsersService {
   findOne(id: string) {
     return this.prisma.user.findUnique({ where: { id } });
   }
+
+  findByAuth0Id(auth0Id: string) {
+    return this.prisma.user.findUnique({ where: { auth0Id } });
+  }
 }

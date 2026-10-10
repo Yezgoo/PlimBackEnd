@@ -1,0 +1,24 @@
+# Paste a fresh Auth0 access token here (variables are per file in REST Client)
+@token = 0sFUgLUvU0yjMU7ja7cUf2KHUZCHbGrV@clients
+
+### My profile → 404 until I register, then 200 (needs users-service running)
+GET http://localhost:3000/me
+Authorization: Bearer {{token}}
+
+### Register my profile → 201 (auth0Id comes from the token, not the body)
+POST http://localhost:3000/me
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "email": "joaoo@example.com", "name": "Joãoo" }
+
+### Register again → 409 from users-service, passed through by the gateway
+POST http://localhost:3000/me
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "email": "joao@example.com" }
+
+### Stop users-service, then → 503
+GET http://localhost:3000/me
+Authorization: Bearer {{token}}
