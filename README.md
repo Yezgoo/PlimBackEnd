@@ -35,6 +35,7 @@ npm run db:users:generate     # generate the Prisma clients
 npm run db:catalog:generate
 npm run db:users:deploy       # create the tables in the databases from .env
 npm run db:catalog:deploy
+npm run db:catalog:seed      # pilot catalog: 5 categories, 5 fixed-price services (safe to re-run)
 ```
 
 The database can be Neon (shared dev database) or the Postgres container. `.env.example` has both.

@@ -13,8 +13,8 @@ GET http://localhost:3000/catalog/categories
 ### Catalog: all services, or one category's
 GET http://localhost:3000/catalog/services?category=canalizacao
 
-### Catalog: one service page (paste a slug from the list)
-GET http://localhost:3000/catalog/services/PASTE-SLUG
+### Catalog: one service page
+GET http://localhost:3000/catalog/services/desentupimento-lavatorio-sanita
 
 ### No token → 401
 GET http://localhost:3000/whoami
