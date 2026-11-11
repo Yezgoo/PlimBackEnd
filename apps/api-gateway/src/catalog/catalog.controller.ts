@@ -22,4 +22,14 @@ export class CatalogController {
   findService(@Param('slug') slug: string) {
     return this.catalog.findService(slug);
   }
+
+  @Get('areas/:postalCode')                   // GET /catalog/areas/3000-123 → municipality, and whether bookings are open
+  findArea(@Param('postalCode') postalCode: string) {
+    return this.catalog.findArea(postalCode);
+  }
+
+  @Get('search')                              // GET /catalog/search?q=desentupir&postalCode=3000-123 (the home screen's search)
+  search(@Query('q') q?: string, @Query('postalCode') postalCode?: string) {
+    return this.catalog.search(q, postalCode);
+  }
 }

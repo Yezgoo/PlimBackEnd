@@ -70,3 +70,29 @@ model ServiceFaq {
   @@index([serviceTypeId])
   @@map("service_faqs")
 }
+
+// Where YezGoo works. A customer's postal code leads to a municipality;
+// bookings are only open where pilot = true.
+model Municipality {
+  code      String   @id                     // INE code (distrito + concelho), e.g. "0603" = Coimbra
+  name      String
+  district  String
+  pilot     Boolean  @default(false)         // bookings are open here
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  postalPrefixes PostalPrefix[]
+
+  @@map("municipalities")
+}
+
+// First 4 digits of a postal code (3000-123 → "3000") → its municipality
+model PostalPrefix {
+  cp4              String @id
+  municipalityCode String @map("municipality_code")
+
+  municipality Municipality @relation(fields: [municipalityCode], references: [code])
+
+  @@index([municipalityCode])
+  @@map("postal_prefixes")
+}

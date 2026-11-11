@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { categories, services } from './seed-data.mjs';
+import { categories, municipalities, services } from './seed-data.mjs';
 
 // Catches typos in the pilot catalog before they reach the database.
 describe('pilot catalog seed data', () => {
   const slugPattern = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+  it('gives each postal prefix to exactly one municipality', () => {
+    const prefixes = municipalities.flatMap((municipality) => municipality.postalPrefixes);
+
+    expect(new Set(prefixes).size).toBe(prefixes.length);
+    for (const prefix of prefixes) expect(prefix).toMatch(/^\d{4}$/);
+    for (const municipality of municipalities) expect(municipality.code).toMatch(/^\d{4}$/);
+  });
+
+  it('opens the pilot in Coimbra', () => {
+    expect(municipalities.filter((municipality) => municipality.pilot).map((m) => m.name)).toEqual(['Coimbra']);
+  });
 
   it('has unique, URL-safe slugs', () => {
     const slugs = [...categories, ...services].map((item) => item.slug);

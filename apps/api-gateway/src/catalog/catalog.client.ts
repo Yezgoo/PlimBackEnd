@@ -22,6 +22,14 @@ export type ServiceDetail = ServiceSummary & {
   faqs: { question: string; answer: string }[];
 };
 
+export type Area = {
+  postalCode: string;
+  municipality: { code: string; name: string; district: string } | null; // null = postal code we don't know
+  available: boolean; // bookings are open there
+};
+
+export type SearchResult = { area: Area | null; services: ServiceSummary[] };
+
 // Talks to catalog-service over plain HTTP.
 @Injectable()
 export class CatalogClient {
@@ -32,12 +40,25 @@ export class CatalogClient {
   }
 
   listServices(categorySlug?: string): Promise<ServiceSummary[]> {
-    const query = categorySlug ? `?category=${encodeURIComponent(categorySlug)}` : '';
-    return this.request(`/services${query}`);
+    return this.request(`/services${this.query({ category: categorySlug })}`);
   }
 
   findService(slug: string): Promise<ServiceDetail> {
     return this.request(`/services/${encodeURIComponent(slug)}`);
+  }
+
+  findArea(postalCode: string): Promise<Area> {
+    return this.request(`/areas/${encodeURIComponent(postalCode)}`);
+  }
+
+  search(text?: string, postalCode?: string): Promise<SearchResult> {
+    return this.request(`/search${this.query({ q: text, postalCode })}`);
+  }
+
+  // builds "?a=1&b=2" from the values that were actually given
+  private query(params: Record<string, string | undefined>) {
+    const given = Object.entries(params).filter((entry): entry is [string, string] => !!entry[1]);
+    return given.length ? `?${new URLSearchParams(given)}` : '';
   }
 
   private request<T>(path: string): Promise<T> {

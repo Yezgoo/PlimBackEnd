@@ -84,4 +84,43 @@ describe('CatalogService', () => {
 
     expect(await service.findService('nope')).toBeNull();
   });
+
+  describe('searchServices()', () => {
+    const services = [
+      {
+        slug: 'desentupimento',
+        name: 'Desentupimento de lavatório ou sanita',
+        description: 'Com teste de escoamento',
+        category: { name: 'Canalização' },
+      },
+      {
+        slug: 'maquina',
+        name: 'Reparação de máquina de lavar',
+        description: 'Diagnóstico',
+        category: { name: 'Eletrodomésticos' },
+      },
+    ];
+    const slugs = async (text?: string) => (await service.searchServices(text)).map((s) => s.slug);
+
+    beforeEach(() => prismaMock.serviceType.findMany.mockResolvedValue(services));
+
+    it('returns everything when nothing is typed', async () => {
+      expect(await slugs()).toEqual(['desentupimento', 'maquina']);
+      expect(await slugs('   ')).toEqual(['desentupimento', 'maquina']);
+    });
+
+    it('ignores accents and case', async () => {
+      expect(await slugs('MAQUINA')).toEqual(['maquina']);
+      expect(await slugs('lavatorio')).toEqual(['desentupimento']);
+    });
+
+    it('matches the category name too', async () => {
+      expect(await slugs('canalizacao')).toEqual(['desentupimento']);
+    });
+
+    it('needs every word to match', async () => {
+      expect(await slugs('maquina lavar')).toEqual(['maquina']);
+      expect(await slugs('maquina sanita')).toEqual([]);
+    });
+  });
 });

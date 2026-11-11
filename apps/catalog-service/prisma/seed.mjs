@@ -5,13 +5,30 @@
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
-import { categories, services } from './seed-data.mjs';
+import { categories, municipalities, services } from './seed-data.mjs';
 
 const client = new pg.Client({ connectionString: process.env.CATALOG_DATABASE_URL });
 await client.connect();
 
 try {
   await client.query('BEGIN'); // all or nothing
+
+  for (const municipality of municipalities) {
+    await client.query(
+      `INSERT INTO municipalities (code, name, district, pilot, updated_at)
+       VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (code) DO UPDATE
+         SET name = EXCLUDED.name, district = EXCLUDED.district, pilot = EXCLUDED.pilot, updated_at = now()`,
+      [municipality.code, municipality.name, municipality.district, municipality.pilot],
+    );
+    for (const cp4 of municipality.postalPrefixes) {
+      await client.query(
+        `INSERT INTO postal_prefixes (cp4, municipality_code) VALUES ($1, $2)
+         ON CONFLICT (cp4) DO UPDATE SET municipality_code = EXCLUDED.municipality_code`,
+        [cp4, municipality.code],
+      );
+    }
+  }
 
   const categoryIds = new Map();
   for (const category of categories) {
@@ -66,7 +83,9 @@ try {
   }
 
   await client.query('COMMIT');
-  console.log(`Seeded ${categories.length} categories and ${services.length} services.`);
+  console.log(
+    `Seeded ${categories.length} categories, ${services.length} services and ${municipalities.length} municipalities.`,
+  );
 } catch (error) {
   await client.query('ROLLBACK');
   console.error('Seed failed, nothing was changed:', error.message);

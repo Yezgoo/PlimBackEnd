@@ -16,6 +16,12 @@ GET http://localhost:3000/catalog/services?category=canalizacao
 ### Catalog: one service page
 GET http://localhost:3000/catalog/services/desentupimento-lavatorio-sanita
 
+### Catalog: is this postal code served? (Coimbra is the pilot)
+GET http://localhost:3000/catalog/areas/3000-123
+
+### Catalog: home search, text and postal code are both optional
+GET http://localhost:3000/catalog/search?q=canalizacao&postalCode=3000-123
+
 ### No token → 401
 GET http://localhost:3000/whoami
 

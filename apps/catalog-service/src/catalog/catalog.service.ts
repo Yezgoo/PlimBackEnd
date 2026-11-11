@@ -25,6 +25,9 @@ const serviceDetailFields = {
   faqs: { select: { question: true, answer: true }, orderBy: { sortOrder: 'asc' } },
 } satisfies Prisma.ServiceTypeSelect;
 
+// "Canalização" and "canalizacao" should match: lower case, accents removed
+const normalize = (text: string) => text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+
 @Injectable()
 export class CatalogService {
   constructor(private readonly prisma: PrismaService) {}
@@ -46,6 +49,20 @@ export class CatalogService {
       },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       select: serviceSummaryFields,
+    });
+  }
+
+  // Every word typed must appear in the service's name, description or category.
+  // The catalog is small (tens of services), so filtering in memory is simpler than
+  // a database text search and handles accents without extensions.
+  async searchServices(text?: string) {
+    const services = await this.listServices();
+    const words = normalize(text ?? '').split(/\s+/).filter(Boolean);
+    if (!words.length) return services;
+
+    return services.filter((service) => {
+      const haystack = normalize(`${service.name} ${service.description} ${service.category.name}`);
+      return words.every((word) => haystack.includes(word));
     });
   }
 

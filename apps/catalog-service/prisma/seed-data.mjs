@@ -2,6 +2,20 @@
 // Prices are in cents, VAT included, and are to be calibrated during the pilot.
 // Slugs are the identity: change a name freely, but changing a slug creates a new row.
 
+// Where bookings are open. `code` is the INE municipality code (distrito + concelho).
+// `postalPrefixes` are the first 4 digits of the postal codes delivered in that municipality.
+// PO-box-only prefixes (e.g. 3001, 3004) are left out: nobody lives in a PO box.
+// To open another city: add it here with pilot: true and run `npm run db:catalog:seed`.
+export const municipalities = [
+  {
+    code: '0603',
+    name: 'Coimbra',
+    district: 'Coimbra',
+    pilot: true,
+    postalPrefixes: ['3000', '3020', '3025', '3030', '3040', '3045'],
+  },
+];
+
 export const categories = [
   { slug: 'limpezas', name: 'Limpezas', icon: 'sparkles', sortOrder: 1 },
   { slug: 'canalizacao', name: 'Canalização', icon: 'droplet', sortOrder: 2 },

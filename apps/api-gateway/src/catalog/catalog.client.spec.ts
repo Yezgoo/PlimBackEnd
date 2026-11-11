@@ -36,7 +36,31 @@ describe('CatalogClient', () => {
     await client.listServices('pequenas reparações');
 
     expect(fetchMock.mock.calls[0][0]).toBe('http://catalog.test/services');
-    expect(fetchMock.mock.calls[1][0]).toBe('http://catalog.test/services?category=pequenas%20repara%C3%A7%C3%B5es');
+    expect(fetchMock.mock.calls[1][0]).toBe('http://catalog.test/services?category=pequenas+repara%C3%A7%C3%B5es');
+  });
+
+  it('search() sends only the filters that were given', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse(200, { area: null, services: [] }));
+
+    await client.search();
+    await client.search('máquina lavar');
+    await client.search(undefined, '3000-123');
+    await client.search('limpeza', '3000-123');
+
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      'http://catalog.test/search',
+      'http://catalog.test/search?q=m%C3%A1quina+lavar',
+      'http://catalog.test/search?postalCode=3000-123',
+      'http://catalog.test/search?q=limpeza&postalCode=3000-123',
+    ]);
+  });
+
+  it('findArea() asks catalog-service about a postal code', async () => {
+    const area = { postalCode: '3000-123', municipality: { code: '0603', name: 'Coimbra', district: 'Coimbra' }, available: true };
+    fetchMock.mockResolvedValue(jsonResponse(200, area));
+
+    await expect(client.findArea('3000-123')).resolves.toEqual(area);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://catalog.test/areas/3000-123');
   });
 
   it('findService() passes a 404 from catalog-service through', async () => {

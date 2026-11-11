@@ -35,7 +35,7 @@ npm run db:users:generate     # generate the Prisma clients
 npm run db:catalog:generate
 npm run db:users:deploy       # create the tables in the databases from .env
 npm run db:catalog:deploy
-npm run db:catalog:seed      # pilot catalog: 5 categories, 5 fixed-price services (safe to re-run)
+npm run db:catalog:seed      # pilot catalog: 5 categories, 5 fixed-price services, Coimbra (safe to re-run)
 ```
 
 The database can be Neon (shared dev database) or the Postgres container. `.env.example` has both.
@@ -62,6 +62,8 @@ Try requests with the REST Client files in `http/` (`gateway.http` for the publi
 | GET | `/catalog/categories` | public | Active categories |
 | GET | `/catalog/services` | public | Active services; `?category=<slug>` filters |
 | GET | `/catalog/services/:slug` | public | One service: price, includes, excludes, FAQ |
+| GET | `/catalog/areas/:postalCode` | public | Municipality of a postal code, and whether bookings are open there |
+| GET | `/catalog/search` | public | Home search: `?q=<text>&postalCode=<code>` (both optional) |
 | GET | `/whoami` | any valid token | Claims of the caller's token |
 | GET | `/me` | logged-in person | Caller's profile, 404 if not registered yet |
 | POST | `/me` | logged-in person | Register the caller's profile (`email`, `name?`, `phone?`) |
