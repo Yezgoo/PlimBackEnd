@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client"                 // Prisma 7's ESM-first generator
+  output   = "../src/generated/prisma"       // generated code goes inside the service
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// MVP sells fixed-price services; "quote" (prices from pros) arrives in V1
+enum PricingModel {
+  fixed
+  quote
+}
+
+// A group of services, e.g. "Canalização"
+model ServiceCategory {
+  id             String   @id @default(uuid()) @db.Uuid
+  name           String
+  slug           String   @unique                          // used in URLs: /catalog/services?category=canalizacao
+  icon           String?
+  commissionRate Decimal? @map("commission_rate") @db.Decimal(4, 2) // overrides the default commission, e.g. 0.18
+  sortOrder      Int      @default(0) @map("sort_order")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  services ServiceType[]
+
+  @@map("service_categories")
+}
+
+// The thing a customer books, e.g. "Desentupimento de lavatório ou sanita"
+model ServiceType {
+  id                 String       @id @default(uuid()) @db.Uuid
+  categoryId         String       @map("category_id") @db.Uuid
+  name               String
+  slug               String       @unique
+  description        String
+  pricingModel       PricingModel @default(fixed) @map("pricing_model")
+  priceCents         Int          @map("price_cents")           // 6500 = 65,00 €, VAT included. Whole cents avoid rounding errors
+  vatRate            Decimal      @default(0.23) @map("vat_rate") @db.Decimal(4, 2)
+  durationMinutes    Int          @map("duration_minutes")
+  includes           String[]                                    // what the price covers
+  excludes           String[]                                    // what it doesn't
+  cancellationPolicy String?      @map("cancellation_policy")    // shown before paying
+  commissionRate     Decimal?     @map("commission_rate") @db.Decimal(4, 2) // overrides the category's
+  sortOrder          Int          @default(0) @map("sort_order")
+  active             Boolean      @default(true)
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  category ServiceCategory @relation(fields: [categoryId], references: [id])
+  faqs     ServiceFaq[]
+
+  @@index([categoryId])
+  @@map("service_types")
+}
+
+// Question and answer shown on a service's page
+model ServiceFaq {
+  id            String @id @default(uuid()) @db.Uuid
+  serviceTypeId String @map("service_type_id") @db.Uuid
+  question      String
+  answer        String
+  sortOrder     Int    @default(0) @map("sort_order")
+
+  serviceType ServiceType @relation(fields: [serviceTypeId], references: [id], onDelete: Cascade)
+
+  @@index([serviceTypeId])
+  @@map("service_faqs")
+}

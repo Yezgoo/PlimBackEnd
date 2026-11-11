@@ -11,6 +11,7 @@ describe('api-gateway (e2e)', () => {
   beforeAll(async () => {
     process.env.AUTH0_ISSUER_URL = 'https://example.eu.auth0.com/';
     process.env.AUTH0_AUDIENCE = 'https://api.plim.app';
+    process.env.CATALOG_SERVICE_URL = 'http://127.0.0.1:1'; // nothing listens there
     const { ApiGatewayModule } = await import('../src/api-gateway.module.js'); // after env is set
 
     const moduleRef = await Test.createTestingModule({ imports: [ApiGatewayModule] }).compile();
@@ -32,6 +33,10 @@ describe('api-gateway (e2e)', () => {
 
   it('GET /me with a garbage token → 401', () => {
     return request(app.getHttpServer()).get('/me').set('Authorization', 'Bearer not-a-jwt').expect(401);
+  });
+
+  it('the catalog is public: no token gets past the guard (503 here, since catalog-service is not running)', () => {
+    return request(app.getHttpServer()).get('/catalog/categories').expect(503);
   });
 
   it('a route nobody marked @Public() is protected by default', () => {

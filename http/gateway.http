@@ -7,6 +7,15 @@
 ### Public endpoint, no token needed
 GET http://localhost:3000/health
 
+### Catalog (public): categories
+GET http://localhost:3000/catalog/categories
+
+### Catalog: all services, or one category's
+GET http://localhost:3000/catalog/services?category=canalizacao
+
+### Catalog: one service page (paste a slug from the list)
+GET http://localhost:3000/catalog/services/PASTE-SLUG
+
 ### No token → 401
 GET http://localhost:3000/whoami
 

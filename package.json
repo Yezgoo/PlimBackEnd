@@ -22,11 +22,16 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "start:gateway": "nest start api-gateway --watch",
     "start:users": "nest start users-service --watch",
+    "start:catalog": "nest start catalog-service --watch",
     "start:notifications": "nest start notifications-service --watch",
     "db:users:migrate": "prisma migrate dev --config apps/users-service/prisma.config.ts",
     "db:users:deploy": "prisma migrate deploy --config apps/users-service/prisma.config.ts",
     "db:users:generate": "prisma generate --config apps/users-service/prisma.config.ts",
-    "db:users:studio": "prisma studio --config apps/users-service/prisma.config.ts"
+    "db:users:studio": "prisma studio --config apps/users-service/prisma.config.ts",
+    "db:catalog:migrate": "prisma migrate dev --config apps/catalog-service/prisma.config.ts",
+    "db:catalog:deploy": "prisma migrate deploy --config apps/catalog-service/prisma.config.ts",
+    "db:catalog:generate": "prisma generate --config apps/catalog-service/prisma.config.ts",
+    "db:catalog:studio": "prisma studio --config apps/catalog-service/prisma.config.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

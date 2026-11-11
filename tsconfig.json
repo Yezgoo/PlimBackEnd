@@ -32,6 +32,9 @@
     },
     {
       "path": "./apps/notifications-service/tsconfig.app.json"
+    },
+    {
+      "path": "./apps/catalog-service/tsconfig.app.json"
     }
   ]
 }

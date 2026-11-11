@@ -1,4 +1,5 @@
-import { HttpException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { callInternalService } from '../internal/internal-http.js';
 
 export type UserProfile = {
   id: string;
@@ -17,8 +18,6 @@ export type UpdateUserInput = { name?: string; phone?: string };
 @Injectable()
 export class UsersClient {
   private readonly baseUrl = process.env.USERS_SERVICE_URL ?? 'http://localhost:3001';
-  // proves to users-service that the request comes from the gateway
-  private readonly internalToken = process.env.INTERNAL_SERVICE_TOKEN ?? '';
 
   findByAuth0Id(auth0Id: string): Promise<UserProfile> {
     // Auth0 ids contain "|" (e.g. "auth0|abc"), so they must be URL-encoded
@@ -39,21 +38,7 @@ export class UsersClient {
     });
   }
 
-  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    let response: Response;
-    try {
-      response = await fetch(`${this.baseUrl}${path}`, {
-        ...init,
-        headers: { 'Content-Type': 'application/json', 'X-Internal-Token': this.internalToken },
-      });
-    } catch {
-      // users-service is down or unreachable
-      throw new ServiceUnavailableException('users-service is unavailable');
-    }
-
-    const body = await response.json().catch(() => undefined);
-    // pass users-service's 400/404/409 straight through to the caller
-    if (!response.ok) throw new HttpException(body ?? response.statusText, response.status);
-    return body as T;
+  private request<T>(path: string, init?: RequestInit): Promise<T> {
+    return callInternalService<T>('users-service', this.baseUrl, path, init);
   }
 }

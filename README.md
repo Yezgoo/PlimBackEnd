@@ -16,6 +16,7 @@ tested with Vitest.
 |---|---|
 | `apps/api-gateway` | The only public entry point. Verifies Auth0 tokens on every route (unless marked `@Public()`), forwards `/me` to users-service. |
 | `apps/users-service` | Owns the `users` table. Only accepts calls carrying the gateway's `X-Internal-Token`. Writes `user.registered` events to an outbox, which a relay sends to Kafka. |
+| `apps/catalog-service` | Owns categories and fixed-price services (price incl. VAT, includes / excludes, FAQ). Read-only for now; same `X-Internal-Token` rule. Port 3002, database `catalog_db`. |
 | `apps/notifications-service` | No HTTP. Consumes `user.registered` (for now it logs the welcome email it would send). |
 
 ## Requirements
@@ -30,8 +31,10 @@ tested with Vitest.
 npm ci
 cp .env.example .env          # then fill in the values (see comments in the file)
 docker compose -f infra/docker-compose.yml up -d
-npm run db:users:generate     # generate the Prisma client
-npm run db:users:deploy       # create the tables in the database from USERS_DATABASE_URL
+npm run db:users:generate     # generate the Prisma clients
+npm run db:catalog:generate
+npm run db:users:deploy       # create the tables in the databases from .env
+npm run db:catalog:deploy
 ```
 
 The database can be Neon (shared dev database) or the Postgres container. `.env.example` has both.
@@ -42,6 +45,7 @@ Each service in its own terminal:
 
 ```bash
 npm run start:users
+npm run start:catalog
 npm run start:notifications
 npm run start:gateway
 ```
@@ -54,6 +58,9 @@ Try requests with the REST Client files in `http/` (`gateway.http` for the publi
 | Method | Path | Auth | |
 |---|---|---|---|
 | GET | `/health` | public | Liveness check |
+| GET | `/catalog/categories` | public | Active categories |
+| GET | `/catalog/services` | public | Active services; `?category=<slug>` filters |
+| GET | `/catalog/services/:slug` | public | One service: price, includes, excludes, FAQ |
 | GET | `/whoami` | any valid token | Claims of the caller's token |
 | GET | `/me` | logged-in person | Caller's profile, 404 if not registered yet |
 | POST | `/me` | logged-in person | Register the caller's profile (`email`, `name?`, `phone?`) |
@@ -70,6 +77,8 @@ npm run lint
 ```
 
 ## Database changes
+
+Each service has its own schema and scripts (`db:users:*`, `db:catalog:*`). For users-service:
 
 1. Edit `apps/users-service/prisma/schema.prisma`.
 2. `npm run db:users:migrate -- --name <what-changed>` (creates a migration; needs a database
