@@ -76,8 +76,23 @@ Try requests with the REST Client files in `http/` (`gateway.http` for the publi
 | POST | `/me/professional/documents/:id/confirm` | logged-in person | After uploading: checks the file arrived, marks it `pending` |
 | GET | `/me/professional/documents/:id/download-url` | logged-in person | Short-lived link to view the file |
 | DELETE | `/me/professional/documents/:id` | logged-in person | Delete a document (not once accepted) |
+| GET | `/admin/me` | admin | Confirms the caller is an admin; returns their permissions |
+
+"Admin" means the token carries the `admin:access` permission (see below). Everything under `/admin` requires it, whether or not the route says so.
 
 "Logged-in person" means machine-to-machine tokens get 403. The Auth0 id always comes from the token, never from the body.
+
+## Admins (Auth0 roles)
+
+Admin rights come from Auth0, not from our database. One-time setup in the Auth0 dashboard:
+
+1. **Applications → APIs → Plim API → Settings**: turn on **Enable RBAC** and **Add Permissions in the Access Token**.
+2. Same API, **Permissions** tab: add `admin:access`.
+3. **User Management → Roles**: create a role `admin` and add the `admin:access` permission to it.
+4. **User Management → Users → (a person) → Roles**: assign `admin`.
+
+The person must log in again to get a token with the permission. In the gateway, protect a route with
+`@RequirePermissions('some:permission')`; routes under `/admin` need `admin:access` automatically.
 
 ## Document uploads
 

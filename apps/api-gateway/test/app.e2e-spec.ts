@@ -39,6 +39,10 @@ describe('api-gateway (e2e)', () => {
     return request(app.getHttpServer()).get('/catalog/categories').expect(503);
   });
 
+  it('GET /admin/me without a token → 401', () => {
+    return request(app.getHttpServer()).get('/admin/me').expect(401);
+  });
+
   it('a route nobody marked @Public() is protected by default', () => {
     return request(app.getHttpServer()).get('/').expect(401);
   });

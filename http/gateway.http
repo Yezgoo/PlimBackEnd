@@ -98,6 +98,10 @@ Authorization: Bearer {{token}}
 GET http://localhost:3000/me/professional/documents/PASTE-DOCUMENT-ID/download-url
 Authorization: Bearer {{token}}
 
+### Am I an admin? → 200 with my permissions, 403 without the admin role (see README "Admins")
+GET http://localhost:3000/admin/me
+Authorization: Bearer {{token}}
+
 ### Stop users-service, then → 503
 GET http://localhost:3000/me
 Authorization: Bearer {{token}}
