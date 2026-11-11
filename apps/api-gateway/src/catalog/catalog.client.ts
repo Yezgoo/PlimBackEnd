@@ -28,6 +28,8 @@ export type Area = {
   available: boolean; // bookings are open there
 };
 
+export type Municipality = { code: string; name: string; district: string; pilot: boolean };
+
 export type SearchResult = { area: Area | null; services: ServiceSummary[] };
 
 // Talks to catalog-service over plain HTTP.
@@ -45,6 +47,10 @@ export class CatalogClient {
 
   findService(slug: string): Promise<ServiceDetail> {
     return this.request(`/services/${encodeURIComponent(slug)}`);
+  }
+
+  listMunicipalities(): Promise<Municipality[]> {
+    return this.request('/municipalities');
   }
 
   findArea(postalCode: string): Promise<Area> {

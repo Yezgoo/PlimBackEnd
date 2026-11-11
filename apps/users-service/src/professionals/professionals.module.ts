@@ -8,10 +8,12 @@ import { DocumentsController } from './documents.controller.js';
 import { DocumentsService } from './documents.service.js';
 import { ProfessionalsController } from './professionals.controller.js';
 import { ProfessionalsService } from './professionals.service.js';
+import { WorkSettingsController } from './work-settings.controller.js';
+import { WorkSettingsService } from './work-settings.service.js';
 
 @Module({
   imports: [DatabaseModule, StorageModule, EventsModule],
-  controllers: [ProfessionalsController, DocumentsController, AdminProfessionalsController],
-  providers: [ProfessionalsService, DocumentsService, AdminProfessionalsService],
+  controllers: [ProfessionalsController, DocumentsController, WorkSettingsController, AdminProfessionalsController],
+  providers: [ProfessionalsService, DocumentsService, WorkSettingsService, AdminProfessionalsService],
 })
 export class ProfessionalsModule {}

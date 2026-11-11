@@ -27,6 +27,11 @@ export class CatalogController {
     return service;
   }
 
+  @Get('municipalities')                      // GET /municipalities → where YezGoo works (or will)
+  listMunicipalities() {
+    return this.areas.listMunicipalities();
+  }
+
   @Get('areas/:postalCode')                   // GET /areas/3000-123 → which municipality, and are bookings open there?
   findArea(@Param('postalCode') postalCode: string) {
     return this.areas.findByPostalCode(this.parsePostalCode(postalCode));

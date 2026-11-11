@@ -23,6 +23,11 @@ export class CatalogController {
     return this.catalog.findService(slug);
   }
 
+  @Get('municipalities')                      // GET /catalog/municipalities → for the "where do you work?" picker
+  listMunicipalities() {
+    return this.catalog.listMunicipalities();
+  }
+
   @Get('areas/:postalCode')                   // GET /catalog/areas/3000-123 → municipality, and whether bookings are open
   findArea(@Param('postalCode') postalCode: string) {
     return this.catalog.findArea(postalCode);

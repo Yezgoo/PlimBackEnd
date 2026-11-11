@@ -51,6 +51,15 @@ export type ProDocument = {
   createdAt: string;
 };
 export type RequestUploadInput = { type: ProDocument['type']; contentType: string; sizeBytes: number; fileName?: string };
+export type AvailabilityBlock = { weekday: number; start: string; end: string }; // weekday 1 = Monday ... 7 = Sunday
+export type TimeOffInput = { startsAt: string; endsAt: string; reason?: string };
+export type WorkSettings = {
+  municipalityCodes: string[];
+  serviceTypeIds: string[];
+  availability: AvailabilityBlock[];
+  timeOff: { id: string; startsAt: string; endsAt: string; reason: string | null }[];
+};
+
 // what an admin sees: the application, who applied, their documents and what is still missing
 export type AdminProfessional = ProfessionalProfile & {
   rejectionReason: string | null;
@@ -120,6 +129,36 @@ export class UsersClient {
 
   async deleteDocument(auth0Id: string, documentId: string): Promise<void> {
     await this.request(`${this.documentsPath(auth0Id)}/${encodeURIComponent(documentId)}`, { method: 'DELETE' });
+  }
+
+  // --- where, what and when the professional works ---
+
+  workSettings(auth0Id: string): Promise<WorkSettings> {
+    return this.request(`${this.userPath(auth0Id)}/professional/work-settings`);
+  }
+
+  setAreas(auth0Id: string, municipalityCodes: string[]): Promise<WorkSettings> {
+    return this.put(auth0Id, 'areas', { municipalityCodes });
+  }
+
+  setServices(auth0Id: string, serviceTypeIds: string[]): Promise<WorkSettings> {
+    return this.put(auth0Id, 'services', { serviceTypeIds });
+  }
+
+  setAvailability(auth0Id: string, slots: AvailabilityBlock[]): Promise<WorkSettings> {
+    return this.put(auth0Id, 'availability', { slots });
+  }
+
+  addTimeOff(auth0Id: string, input: TimeOffInput): Promise<WorkSettings> {
+    return this.request(`${this.userPath(auth0Id)}/professional/time-off`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async removeTimeOff(auth0Id: string, timeOffId: string): Promise<void> {
+    await this.request(`${this.userPath(auth0Id)}/professional/time-off/${encodeURIComponent(timeOffId)}`, { method: 'DELETE' });
+  }
+
+  private put(auth0Id: string, what: string, body: object): Promise<WorkSettings> {
+    return this.request(`${this.userPath(auth0Id)}/professional/${what}`, { method: 'PUT', body: JSON.stringify(body) });
   }
 
   // --- admin: reviewing applications. `adminId` is the admin's Auth0 id, taken from their token. ---

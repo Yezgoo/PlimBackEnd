@@ -3,7 +3,7 @@ import { PrismaService } from '../database/prisma.service.js';
 import { AreasService } from './areas.service.js';
 
 describe('AreasService', () => {
-  const prismaMock = { postalPrefix: { findUnique: vi.fn() } };
+  const prismaMock = { postalPrefix: { findUnique: vi.fn() }, municipality: { findMany: vi.fn() } };
   let service: AreasService;
 
   beforeEach(() => {
@@ -45,5 +45,14 @@ describe('AreasService', () => {
       municipality: null,
       available: false,
     });
+  });
+
+  it('lists municipalities by district and name, with the pilot flag', async () => {
+    prismaMock.municipality.findMany.mockResolvedValue([{ code: '0603', name: 'Coimbra', district: 'Coimbra', pilot: true }]);
+
+    await expect(service.listMunicipalities()).resolves.toEqual([
+      { code: '0603', name: 'Coimbra', district: 'Coimbra', pilot: true },
+    ]);
+    expect(prismaMock.municipality.findMany.mock.calls[0][0].orderBy).toEqual([{ district: 'asc' }, { name: 'asc' }]);
   });
 });

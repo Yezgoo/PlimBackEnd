@@ -50,6 +50,10 @@ model Professional {
 
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   documents ProDocument[]
+  areas     ProArea[]
+  services  ProService[]
+  slots     AvailabilitySlot[]
+  timeOff   TimeOff[]
 
   @@map("professionals")
 }
@@ -89,6 +93,61 @@ model ProDocument {
 
   @@index([professionalId])
   @@map("pro_documents")
+}
+
+// --- Where, what and when a professional works. Together these answer "who can take this job?" ---
+
+// A municipality the professional accepts jobs in. The code is the INE code from catalog-service ("0603" = Coimbra).
+model ProArea {
+  professionalId   String @map("professional_id") @db.Uuid
+  municipalityCode String @map("municipality_code")
+
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@id([professionalId, municipalityCode])
+  @@index([municipalityCode])
+  @@map("pro_areas")
+}
+
+// A catalog service the professional does. The id belongs to catalog-service (no foreign key across databases).
+model ProService {
+  professionalId String @map("professional_id") @db.Uuid
+  serviceTypeId  String @map("service_type_id") @db.Uuid
+
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@id([professionalId, serviceTypeId])
+  @@index([serviceTypeId])
+  @@map("pro_services")
+}
+
+// One block of the weekly timetable, e.g. Monday 09:00 to 13:00. Times are Lisbon local time.
+model AvailabilitySlot {
+  id             String @id @default(uuid()) @db.Uuid
+  professionalId String @map("professional_id") @db.Uuid
+  weekday        Int                              // 1 = Monday ... 7 = Sunday (ISO)
+  startMinute    Int    @map("start_minute")      // minutes after midnight: 540 = 09:00
+  endMinute      Int    @map("end_minute")
+
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([professionalId, weekday])
+  @@map("availability_slots")
+}
+
+// A period the professional is not available (holidays, illness), whatever the timetable says
+model TimeOff {
+  id             String   @id @default(uuid()) @db.Uuid
+  professionalId String   @map("professional_id") @db.Uuid
+  startsAt       DateTime @map("starts_at")
+  endsAt         DateTime @map("ends_at")
+  reason         String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([professionalId, endsAt])
+  @@map("time_off")
 }
 
 // Transactional outbox: an event is saved in the same transaction as the change it describes,

@@ -13,6 +13,14 @@ export type Area = {
 export class AreasService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Every municipality we know, for the "where do you work?" picker. `pilot` = bookings are open there.
+  listMunicipalities() {
+    return this.prisma.municipality.findMany({
+      orderBy: [{ district: 'asc' }, { name: 'asc' }],
+      select: { code: true, name: true, district: true, pilot: true },
+    });
+  }
+
   async findByPostalCode(postalCode: ParsedPostalCode): Promise<Area> {
     const prefix = await this.prisma.postalPrefix.findUnique({
       where: { cp4: postalCode.cp4 },
