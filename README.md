@@ -22,7 +22,7 @@ tested with Vitest.
 ## Requirements
 
 - Node.js 24
-- Docker Desktop (Kafka, and optionally a local Postgres)
+- Docker Desktop (Kafka, local file storage, and optionally a local Postgres)
 - An Auth0 tenant with the Plim API (`https://api.plim.app`)
 
 ## First-time setup
@@ -71,8 +71,21 @@ Try requests with the REST Client files in `http/` (`gateway.http` for the publi
 | GET | `/me/professional` | logged-in person | Caller's professional profile, 404 if they never applied |
 | POST | `/me/professional` | logged-in person | Apply as a professional (`nif`, `activityRegistered: true`, optional `businessName`, `bio`, `insurancePolicy`, `insuranceValidUntil`); starts as `applied` |
 | PATCH | `/me/professional` | logged-in person | Edit the professional profile (the NIF only while `applied`) |
+| GET | `/me/professional/documents` | logged-in person | Caller's verification documents |
+| POST | `/me/professional/documents` | logged-in person | Ask for an upload link (`type`, `contentType`, `sizeBytes`, `fileName?`) → `{ document, upload: { method, url, headers } }` |
+| POST | `/me/professional/documents/:id/confirm` | logged-in person | After uploading: checks the file arrived, marks it `pending` |
+| GET | `/me/professional/documents/:id/download-url` | logged-in person | Short-lived link to view the file |
+| DELETE | `/me/professional/documents/:id` | logged-in person | Delete a document (not once accepted) |
 
 "Logged-in person" means machine-to-machine tokens get 403. The Auth0 id always comes from the token, never from the body.
+
+## Document uploads
+
+Files never pass through the backend. The app asks for an upload link, PUTs the file straight to
+storage (AWS S3, or the local `plim-storage` container) with exactly the returned headers, then calls
+`confirm`. The bucket is private; viewing a file also goes through a short-lived signed link.
+Allowed: PDF, JPEG, PNG, up to 10 MB. For uploads from the **web** app, the S3 bucket needs a CORS
+rule allowing `PUT` and `GET` from the web origin (phones don't need it).
 
 ## Tests
 

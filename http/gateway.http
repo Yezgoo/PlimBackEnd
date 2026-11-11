@@ -76,6 +76,28 @@ Content-Type: application/json
 
 { "bio": "Canalizador há 10 anos em Coimbra." }
 
+### Documents, step 1: ask for an upload link (sizeBytes must be the file's exact size)
+POST http://localhost:3000/me/professional/documents
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "type": "id_card", "contentType": "application/pdf", "sizeBytes": 12345, "fileName": "cc.pdf" }
+
+### Documents, step 2: PUT the file to upload.url from the answer, with header Content-Type: application/pdf
+### e.g.  curl -X PUT -H "Content-Type: application/pdf" --data-binary "@cc.pdf" "<upload.url>"
+
+### Documents, step 3: confirm (paste document.id) → status "pending"
+POST http://localhost:3000/me/professional/documents/PASTE-DOCUMENT-ID/confirm
+Authorization: Bearer {{token}}
+
+### My documents
+GET http://localhost:3000/me/professional/documents
+Authorization: Bearer {{token}}
+
+### Link to view one of my documents (valid for 5 minutes)
+GET http://localhost:3000/me/professional/documents/PASTE-DOCUMENT-ID/download-url
+Authorization: Bearer {{token}}
+
 ### Stop users-service, then → 503
 GET http://localhost:3000/me
 Authorization: Bearer {{token}}

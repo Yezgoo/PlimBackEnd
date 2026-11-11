@@ -45,9 +45,47 @@ model Professional {
   createdAt           DateTime           @default(now()) @map("created_at")
   updatedAt           DateTime           @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents ProDocument[]
 
   @@map("professionals")
+}
+
+enum ProDocumentType {
+  id_card
+  activity_proof        // proof of an open activity at the tax office
+  liability_insurance
+  certificate           // professional qualification
+}
+
+enum ProDocumentStatus {
+  uploading  // an upload link was issued, the file hasn't been confirmed yet
+  pending    // uploaded, waiting for an admin
+  accepted
+  rejected
+}
+
+// A file a professional sends to be verified. The file itself lives in private storage (S3);
+// this row only keeps where it is and what an admin decided.
+model ProDocument {
+  id              String            @id @default(uuid()) @db.Uuid
+  professionalId  String            @map("professional_id") @db.Uuid
+  type            ProDocumentType
+  fileKey         String            @unique @map("file_key")   // path inside the bucket, never a public URL
+  fileName        String?           @map("file_name")          // the name on the person's phone, for display only
+  contentType     String            @map("content_type")
+  sizeBytes       Int               @map("size_bytes")
+  status          ProDocumentStatus @default(uploading)
+  rejectionReason String?           @map("rejection_reason")
+  reviewedBy      String?           @map("reviewed_by") @db.Uuid // the admin's user id
+  reviewedAt      DateTime?         @map("reviewed_at")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([professionalId])
+  @@map("pro_documents")
 }
 
 // Transactional outbox: an event is saved in the same transaction as the change it describes,

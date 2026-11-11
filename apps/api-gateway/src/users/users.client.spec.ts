@@ -77,6 +77,29 @@ describe('UsersClient', () => {
     expect(sent).toEqual({ email: 'a@b.com', auth0Id: 'auth0|me' });
   });
 
+  it('document calls stay under the caller, whatever id is asked for', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse(200, {}));
+    const base = 'http://users.test/users/by-auth0/auth0%7Cme/professional/documents';
+
+    await client.requestDocumentUpload('auth0|me', { type: 'id_card', contentType: 'application/pdf', sizeBytes: 100 });
+    await client.confirmDocumentUpload('auth0|me', 'doc-1');
+    await client.documentDownloadUrl('auth0|me', 'doc-1');
+    await client.deleteDocument('auth0|me', '../../other-user'); // a hostile id can't escape the caller's path
+
+    expect(fetchMock.mock.calls.map(([url, init]) => `${init.method ?? 'GET'} ${url}`)).toEqual([
+      `POST ${base}`,
+      `POST ${base}/doc-1/confirm`,
+      `GET ${base}/doc-1/download-url`,
+      `DELETE ${base}/..%2F..%2Fother-user`,
+    ]);
+  });
+
+  it('deleteDocument() copes with an empty 204 answer', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await expect(client.deleteDocument('auth0|me', 'doc-1')).resolves.toBeUndefined();
+  });
+
   it('passes error statuses from users-service through', async () => {
     fetchMock.mockResolvedValue(jsonResponse(409, { statusCode: 409, message: 'duplicate' }));
 

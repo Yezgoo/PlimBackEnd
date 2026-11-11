@@ -49,6 +49,22 @@ services:
       timeout: 10s
       retries: 10
 
+  # Local stand-in for AWS S3 (same API, signatures checked), so uploads can be developed and tested offline.
+  # Versity S3 Gateway serves a folder as S3: each sub-folder of /data is a bucket.
+  storage:
+    image: versity/versitygw:latest
+    container_name: plim-storage
+    entrypoint: ["sh", "-c", "mkdir -p /data/plim-documents && exec versitygw posix /data"]  # creates the bucket on start
+    environment:
+      ROOT_ACCESS_KEY: plim                      # local dev only, never real credentials
+      ROOT_SECRET_KEY: plim_dev_password
+      VGW_CORS_ALLOW_ORIGIN: "http://localhost:8081"   # lets the web app upload straight to it
+    ports:
+      - "7070:7070"                              # S3 API: STORAGE_ENDPOINT=http://localhost:7070
+    volumes:
+      - storage-data:/data
+
 volumes:
   postgres-data:
   kafka-data:
+  storage-data:
