@@ -3,10 +3,11 @@ import { APP_GUARD } from '@nestjs/core';
 import { UsersServiceController } from './users-service.controller.js';
 import { UsersServiceService } from './users-service.service.js';
 import { UsersModule } from './users/users.module.js';
+import { ProfessionalsModule } from './professionals/professionals.module.js';
 import { InternalTokenGuard } from './auth/internal-token.guard.js';
 
 @Module({
-  imports: [UsersModule],
+  imports: [UsersModule, ProfessionalsModule],
   controllers: [UsersServiceController],
   providers: [
     UsersServiceService,

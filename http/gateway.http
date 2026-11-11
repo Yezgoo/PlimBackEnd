@@ -58,6 +58,24 @@ Content-Type: application/json
 
 { "name": "João Pedro", "phone": "+351912345678" }
 
+### Apply as a professional → 201, status "applied" (needs a profile first; NIF must be valid)
+POST http://localhost:3000/me/professional
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "nif": "123456789", "activityRegistered": true, "businessName": "Canalizações Exemplo", "insuranceValidUntil": "2027-12-31" }
+
+### My professional profile → 200, or 404 if I never applied
+GET http://localhost:3000/me/professional
+Authorization: Bearer {{token}}
+
+### Edit my professional profile
+PATCH http://localhost:3000/me/professional
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "bio": "Canalizador há 10 anos em Coimbra." }
+
 ### Stop users-service, then → 503
 GET http://localhost:3000/me
 Authorization: Bearer {{token}}

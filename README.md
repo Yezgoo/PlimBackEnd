@@ -68,6 +68,9 @@ Try requests with the REST Client files in `http/` (`gateway.http` for the publi
 | GET | `/me` | logged-in person | Caller's profile, 404 if not registered yet |
 | POST | `/me` | logged-in person | Register the caller's profile (`email`, `name?`, `phone?`) |
 | PATCH | `/me` | logged-in person | Change `name` / `phone` |
+| GET | `/me/professional` | logged-in person | Caller's professional profile, 404 if they never applied |
+| POST | `/me/professional` | logged-in person | Apply as a professional (`nif`, `activityRegistered: true`, optional `businessName`, `bio`, `insurancePolicy`, `insuranceValidUntil`); starts as `applied` |
+| PATCH | `/me/professional` | logged-in person | Edit the professional profile (the NIF only while `applied`) |
 
 "Logged-in person" means machine-to-machine tokens get 403. The Auth0 id always comes from the token, never from the body.
 

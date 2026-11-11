@@ -53,4 +53,24 @@ describe('users-service (e2e)', () => {
       .send({ email: 'new@example.com' })
       .expect(400);
   });
+
+  describe('applying as a professional', () => {
+    const apply = (body: object) =>
+      request(app.getHttpServer())
+        .post('/users/by-auth0/auth0%7C1/professional')
+        .set('X-Internal-Token', secret)
+        .send(body);
+
+    it('refuses an invalid NIF', () => {
+      return apply({ nif: '123456780', activityRegistered: true }).expect(400);
+    });
+
+    it('refuses an application without an open activity', () => {
+      return apply({ nif: '123456789', activityRegistered: false }).expect(400);
+    });
+
+    it('nobody can approve themselves: status is not an accepted field', () => {
+      return apply({ nif: '123456789', activityRegistered: true, status: 'approved' }).expect(400);
+    });
+  });
 });

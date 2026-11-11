@@ -45,6 +45,28 @@ describe('UsersClient', () => {
     expect(JSON.parse(init.body)).toEqual({ name: 'Ana' });
   });
 
+  it('applyAsProfessional() posts the application under the caller', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(201, { id: 'pro-1', status: 'applied' }));
+
+    await client.applyAsProfessional('auth0|me', { nif: '123456789', activityRegistered: true });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://users.test/users/by-auth0/auth0%7Cme/professional');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({ nif: '123456789', activityRegistered: true });
+  });
+
+  it('findProfessional() and updateProfessional() use the same path', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse(200, { id: 'pro-1' }));
+
+    await client.findProfessional('auth0|me');
+    await client.updateProfessional('auth0|me', { bio: 'Canalizador' });
+
+    expect(fetchMock.mock.calls[0][0]).toBe('http://users.test/users/by-auth0/auth0%7Cme/professional');
+    expect(fetchMock.mock.calls[0][1].method).toBeUndefined(); // GET
+    expect(fetchMock.mock.calls[1][1].method).toBe('PATCH');
+  });
+
   it('create() takes the Auth0 id from the token, not from the body', async () => {
     fetchMock.mockResolvedValue(jsonResponse(201, { id: 'uuid-1' }));
     const sneaky = { email: 'a@b.com', auth0Id: 'auth0|someone-else' };

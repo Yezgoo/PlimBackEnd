@@ -16,7 +16,38 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  professional Professional?
+
   @@map("users")
+}
+
+enum ProfessionalStatus {
+  applied    // sent the application, waiting for an admin
+  approved   // can receive jobs
+  rejected
+  suspended
+}
+
+// A user who also works on the platform. One person, one login: customers and pros are both users.
+model Professional {
+  id                  String             @id @default(uuid()) @db.Uuid
+  userId              String             @unique @map("user_id") @db.Uuid
+  businessName        String?            @map("business_name")
+  nif                 String             @unique                      // Portuguese tax number, 9 digits
+  activityRegistered  Boolean            @map("activity_registered")  // "atividade aberta" at the tax office
+  insurancePolicy     String?            @map("insurance_policy")     // civil liability insurance
+  insuranceValidUntil DateTime?          @map("insurance_valid_until") @db.Date
+  bio                 String?
+  status              ProfessionalStatus @default(applied)
+  verifiedAt          DateTime?          @map("verified_at")          // set on approval: the "Verificado" badge
+  ratingAvg           Decimal?           @map("rating_avg") @db.Decimal(3, 2) // kept up to date from reviews
+  ratingCount         Int                @default(0) @map("rating_count")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("professionals")
 }
 
 // Transactional outbox: an event is saved in the same transaction as the change it describes,
