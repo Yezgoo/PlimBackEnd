@@ -11,6 +11,7 @@ describe('UsersClient', () => {
 
   beforeEach(() => {
     process.env.USERS_SERVICE_URL = 'http://users.test';
+    process.env.INTERNAL_SERVICE_TOKEN = 'internal-secret';
     vi.stubGlobal('fetch', fetchMock); // no real network calls in unit tests
     fetchMock.mockReset();
     client = new UsersClient();
@@ -22,7 +23,26 @@ describe('UsersClient', () => {
     fetchMock.mockResolvedValue(jsonResponse(200, { id: 'uuid-1' }));
 
     await expect(client.findByAuth0Id('auth0|abc')).resolves.toEqual({ id: 'uuid-1' });
-    expect(fetchMock).toHaveBeenCalledWith('http://users.test/users/by-auth0/auth0%7Cabc', undefined);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://users.test/users/by-auth0/auth0%7Cabc');
+  });
+
+  it('sends the internal token so users-service accepts the call', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, { id: 'uuid-1' }));
+
+    await client.findByAuth0Id('auth0|abc');
+
+    expect(fetchMock.mock.calls[0][1].headers).toMatchObject({ 'X-Internal-Token': 'internal-secret' });
+  });
+
+  it('update() sends a PATCH for the caller only', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, { id: 'uuid-1', name: 'Ana' }));
+
+    await client.update('auth0|me', { name: 'Ana' });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://users.test/users/by-auth0/auth0%7Cme');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body)).toEqual({ name: 'Ana' });
   });
 
   it('create() takes the Auth0 id from the token, not from the body', async () => {

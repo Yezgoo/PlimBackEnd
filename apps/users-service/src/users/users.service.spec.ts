@@ -2,9 +2,12 @@ import { Test } from '@nestjs/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PrismaService } from '../database/prisma.service.js';
 import { UsersService } from './users.service.js';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
-import { EventsPublisher } from '../events/events.publisher.js';
+import { OutboxRelay } from '../events/outbox.relay.js';
+
+const prismaError = (code: string) =>
+  new Prisma.PrismaClientKnownRequestError('failed', { code, clientVersion: 'test' });
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -15,11 +18,15 @@ describe('UsersService', () => {
       create: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),
+      update: vi.fn(),
     },
+    outboxEvent: { create: vi.fn() },
+    // run the transaction callback against the same fake, like a real transaction would
+    $transaction: vi.fn((work: (tx: unknown) => unknown) => work(prismaMock)),
   };
 
-  // fake Kafka publisher: we only check what users-service asks it to send
-  const eventsMock = { publish: vi.fn() };
+  // fake relay: we only check that create() asks it to send right away
+  const outboxMock = { flush: vi.fn() };
 
   beforeEach(async () => {
     vi.clearAllMocks(); // reset call history between tests
@@ -28,7 +35,7 @@ describe('UsersService', () => {
       providers: [
         UsersService,
         { provide: PrismaService, useValue: prismaMock }, // "when someone asks for PrismaService, give them the fake"
-        { provide: EventsPublisher, useValue: eventsMock },
+        { provide: OutboxRelay, useValue: outboxMock },
       ],
     }).compile();
 
@@ -45,6 +52,42 @@ describe('UsersService', () => {
     expect(result.id).toBe('uuid-1');
   });
 
+  it('create() saves user.registered in the outbox, in the same transaction', async () => {
+    const user = { id: 'uuid-1', auth0Id: 'auth0|1', email: 'a@b.com', name: 'Ana' };
+    prismaMock.user.create.mockResolvedValue(user);
+
+    await service.create({ auth0Id: 'auth0|1', email: 'a@b.com', name: 'Ana' });
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    const saved = prismaMock.outboxEvent.create.mock.calls[0][0].data;
+    expect(saved).toMatchObject({
+      topic: 'user.registered',
+      key: 'uuid-1',
+      payload: {
+        type: 'user.registered',
+        data: { userId: 'uuid-1', auth0Id: 'auth0|1', email: 'a@b.com', name: 'Ana' },
+      },
+    });
+    expect(saved.id).toBe(saved.payload.eventId); // outbox row id = event id, so consumers can dedupe
+  });
+
+  it('create() asks the relay to send the event right away', async () => {
+    prismaMock.user.create.mockResolvedValue({ id: 'uuid-1', auth0Id: 'auth0|1', email: 'a@b.com', name: null });
+
+    await service.create({ auth0Id: 'auth0|1', email: 'a@b.com' });
+
+    expect(outboxMock.flush).toHaveBeenCalled();
+  });
+
+  it('create() throws 409 and saves no event when the user already exists', async () => {
+    prismaMock.user.create.mockRejectedValue(prismaError('P2002'));
+
+    await expect(service.create({ auth0Id: 'auth0|1', email: 'a@b.com' }))
+      .rejects.toBeInstanceOf(ConflictException);
+    expect(prismaMock.outboxEvent.create).not.toHaveBeenCalled();
+    expect(outboxMock.flush).not.toHaveBeenCalled();
+  });
+
   it('findAll() asks for newest users first', async () => {
     prismaMock.user.findMany.mockResolvedValue([]);
 
@@ -59,49 +102,17 @@ describe('UsersService', () => {
     expect(await service.findOne('some-id')).toBeNull();
   });
 
-  it('create() throws 409 when the email or auth0Id already exists', async () => {
-    prismaMock.user.create.mockRejectedValue(
-      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
-        code: 'P2002',
-        clientVersion: 'test',
-      }),
-    );
+  it('updateByAuth0Id() changes only the given fields', async () => {
+    prismaMock.user.update.mockResolvedValue({ id: 'uuid-1', name: 'Ana Maria' });
 
-    await expect(service.create({ auth0Id: 'auth0|1', email: 'a@b.com' }))
-      .rejects.toBeInstanceOf(ConflictException);
+    await service.updateByAuth0Id('auth0|1', { name: 'Ana Maria' });
+
+    expect(prismaMock.user.update).toHaveBeenCalledWith({ where: { auth0Id: 'auth0|1' }, data: { name: 'Ana Maria' } });
   });
 
-  it('create() publishes user.registered, keyed by the user id', async () => {
-    const user = { id: 'uuid-1', auth0Id: 'auth0|1', email: 'a@b.com', name: 'Ana' };
-    prismaMock.user.create.mockResolvedValue(user);
+  it('updateByAuth0Id() throws 404 when nobody has that Auth0 id', async () => {
+    prismaMock.user.update.mockRejectedValue(prismaError('P2025'));
 
-    await service.create({ auth0Id: 'auth0|1', email: 'a@b.com', name: 'Ana' });
-
-    expect(eventsMock.publish).toHaveBeenCalledWith(
-      'user.registered',
-      'uuid-1',
-      expect.objectContaining({
-        type: 'user.registered',
-        data: { userId: 'uuid-1', auth0Id: 'auth0|1', email: 'a@b.com', name: 'Ana' },
-      }),
-    );
-  });
-
-  it('create() still returns the user when Kafka is down', async () => {
-    prismaMock.user.create.mockResolvedValue({ id: 'uuid-1', auth0Id: 'auth0|1', email: 'a@b.com', name: null });
-    eventsMock.publish.mockRejectedValueOnce(new Error('broker unreachable'));
-
-    const result = await service.create({ auth0Id: 'auth0|1', email: 'a@b.com' });
-
-    expect(result.id).toBe('uuid-1');
-  });
-
-  it('create() publishes nothing when the user already exists', async () => {
-    prismaMock.user.create.mockRejectedValue(
-      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', { code: 'P2002', clientVersion: 'test' }),
-    );
-
-    await expect(service.create({ auth0Id: 'auth0|1', email: 'a@b.com' })).rejects.toThrow();
-    expect(eventsMock.publish).not.toHaveBeenCalled();
+    await expect(service.updateByAuth0Id('auth0|nobody', { name: 'X' })).rejects.toBeInstanceOf(NotFoundException);
   });
 });

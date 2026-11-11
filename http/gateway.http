@@ -1,7 +1,24 @@
-# Paste a fresh Auth0 access token here (variables are per file in REST Client)
-@token = 0sFUgLUvU0yjMU7ja7cUf2KHUZCHbGrV@clients
+# Calls to the gateway (port 3000), the only public entry point.
+# Paste a fresh Auth0 access token (the long eyJ… string). Don't commit a real one.
+# /me needs a token from a logged-in person: log in through the app and copy it,
+# or use `auth0 test token`. Tokens from the API's Test tab are machine tokens → 403 on /me.
+@token = PASTE-ACCESS-TOKEN
 
-### My profile → 404 until I register, then 200 (needs users-service running)
+### Public endpoint, no token needed
+GET http://localhost:3000/health
+
+### No token → 401
+GET http://localhost:3000/whoami
+
+### Any valid token → 200 with its claims
+GET http://localhost:3000/whoami
+Authorization: Bearer {{token}}
+
+### Tampered token → 401
+GET http://localhost:3000/whoami
+Authorization: Bearer {{token}}x
+
+### My profile → 404 until I register, then 200 (403 with a machine token)
 GET http://localhost:3000/me
 Authorization: Bearer {{token}}
 
@@ -10,7 +27,7 @@ POST http://localhost:3000/me
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{ "email": "joaoo@example.com", "name": "Joãoo" }
+{ "email": "joao@example.com", "name": "João" }
 
 ### Register again → 409 from users-service, passed through by the gateway
 POST http://localhost:3000/me
@@ -18,6 +35,13 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "email": "joao@example.com" }
+
+### Change my name / phone → 200 (email can't be changed here: it belongs to Auth0)
+PATCH http://localhost:3000/me
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "name": "João Pedro", "phone": "+351912345678" }
 
 ### Stop users-service, then → 503
 GET http://localhost:3000/me

@@ -1,10 +1,12 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import type { JWTPayload } from 'jose';
 import { CurrentUser } from '../auth/current-user.decorator.js';
-import { UsersClient, type RegisterUserInput } from './users.client.js';
+import { HumanCallerGuard } from '../auth/human-caller.guard.js';
+import { UsersClient, type RegisterUserInput, type UpdateUserInput } from './users.client.js';
 
 // Everything here is about the caller, identified by the token's "sub" claim.
 @Controller('me')
+@UseGuards(HumanCallerGuard)                  // people only: machine tokens get 403
 export class MeController {
   constructor(private readonly usersClient: UsersClient) {}
 
@@ -16,5 +18,10 @@ export class MeController {
   @Post()                                     // POST /me → register my profile
   register(@CurrentUser() user: JWTPayload, @Body() input: RegisterUserInput) {
     return this.usersClient.create(user.sub!, input);
+  }
+
+  @Patch()                                    // PATCH /me → change my name or phone
+  update(@CurrentUser() user: JWTPayload, @Body() input: UpdateUserInput) {
+    return this.usersClient.update(user.sub!, input);
   }
 }

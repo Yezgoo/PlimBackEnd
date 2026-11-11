@@ -1,5 +1,11 @@
+# Direct calls to users-service (port 3001). Only the gateway is meant to call it,
+# so every request needs the shared secret. Copy INTERNAL_SERVICE_TOKEN from your .env.
+# (REST Client variables are per file; don't commit the real value.)
+@internal = PASTE-INTERNAL_SERVICE_TOKEN-FROM-.env
+
 ### Create a user
 POST http://localhost:3001/users
+X-Internal-Token: {{internal}}
 Content-Type: application/json
 
 {
@@ -10,40 +16,42 @@ Content-Type: application/json
 
 ### List users
 GET http://localhost:3001/users
+X-Internal-Token: {{internal}}
 
 ### Get one user (paste an id from the list)
 GET http://localhost:3001/users/PASTE-ID-HERE
+X-Internal-Token: {{internal}}
+
+### Find by Auth0 id ("|" is written %7C)
+GET http://localhost:3001/users/by-auth0/auth0%7Ctest-123
+X-Internal-Token: {{internal}}
+
+### Change name / phone
+PATCH http://localhost:3001/users/by-auth0/auth0%7Ctest-123
+X-Internal-Token: {{internal}}
+Content-Type: application/json
+
+{ "name": "João Pedro", "phone": "+351912345678" }
 
 ### Invalid id → 400
 GET http://localhost:3001/users/abc
+X-Internal-Token: {{internal}}
 
 ### Invalid email → 400
 POST http://localhost:3001/users
+X-Internal-Token: {{internal}}
 Content-Type: application/json
 
 { "auth0Id": "auth0|test-999", "email": "not-an-email" }
 
 ### Unknown field → 400
 POST http://localhost:3001/users
+X-Internal-Token: {{internal}}
 Content-Type: application/json
 
 { "auth0Id": "auth0|test-998", "email": "x@example.com", "role": "admin" }
 
 ### Duplicate → 409 (run the first "Create a user" request again)
 
-
-@token = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IkVQU1dRMkx6NlJhZWZPUXpsUHlETCJ9.eyJpc3MiOiJodHRwczovL2Rldi00ZG91N3Q1MzY0Mml5ZWN3LmV1LmF1dGgwLmNvbS8iLCJzdWIiOiIwc0ZVZ0xVdlUweWpNVTdqYTdjVWYyS0hVWkNIYkdyVkBjbGllbnRzIiwiYXVkIjoiaHR0cHM6Ly9hcGkucGxpbS5hcHAiLCJpYXQiOjE3OTE0MDQxODUsImV4cCI6MTc5MTQ5MDU4NSwiZ3R5IjoiY2xpZW50LWNyZWRlbnRpYWxzIiwiYXpwIjoiMHNGVWdMVXZVMHlqTVU3amE3Y1VmMktIVVpDSGJHclYifQ.YODQxJS6855V-43kSTz2A2U2TlByfCbT9U2xI2Z1bqY-Rclxsb_k-vA8CIlCmeU4PLDKm646H3nFzUH32jcJfKfjkg_YNZl40KXN04CvP-goyKogoe0h8C05QygCQIWG0RiHHAWRDCb-n4PAT5b4ekAU5Bnp4LlycyjJo8FDexzy9NDLGZ-pM48CSStMiqp0Xo_iWs7gVXVnxBotOpftb1HGIjFJnMdKdRJxMiJf8L2ecKQrLfUkINg8fcPaGvb5gcy3Ivp0EE_WNXaKUPrFN-k-xxtT3nD_ojkNFIuDSwWYDh_OPVtZ2aUTm0QRIidaPifIlPcgaQwhDVvWi98zag
-
-### No token → 401
-GET http://localhost:3000/whoami
-
-### Valid token → 200 with your claims
-GET http://localhost:3000/whoami
-Authorization: Bearer {{token}}
-
-### Tampered token → 401 (change one character in the middle of the token)
-GET http://localhost:3000/whoami
-Authorization: Bearer {{token}}x
-
-### Public endpoint still works without a token
-GET http://localhost:3000/health
+### No secret → 401 (what anyone except the gateway gets)
+GET http://localhost:3001/users

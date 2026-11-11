@@ -18,3 +18,19 @@ model User {
 
   @@map("users")
 }
+
+// Transactional outbox: an event is saved in the same transaction as the change it describes,
+// and OutboxRelay sends it to Kafka afterwards. If Kafka is down, the event waits here instead of being lost.
+model OutboxEvent {
+  id          String    @id @db.Uuid                    // = the event's eventId
+  topic       String
+  key         String
+  payload     Json
+  attempts    Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  publishedAt DateTime? @map("published_at")             // null = still to be sent
+
+  @@index([publishedAt, createdAt])
+  @@map("outbox_events")
+}
+

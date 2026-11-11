@@ -1,24 +1,31 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../database/prisma.service.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { UpdateUserDto } from './dto/update-user.dto.js';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type User } from '../generated/prisma/client.js';
-import { EventsPublisher } from '../events/events.publisher.js';
+import { OutboxRelay } from '../events/outbox.relay.js';
 import { USER_REGISTERED_TOPIC, type UserRegisteredEvent } from '../events/user-events.js';
 
 @Injectable()
 export class UsersService {
-  private readonly logger = new Logger(UsersService.name);
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly events: EventsPublisher,
+    private readonly outbox: OutboxRelay,
   ) {}
 
   async create(data: CreateUserDto) {
     let user: User;
     try {
-      user = await this.prisma.user.create({ data });
+      // the user and its user.registered event are saved together: both or neither
+      user = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.user.create({ data });
+        const event = this.userRegistered(created);
+        await tx.outboxEvent.create({
+          data: { id: event.eventId, topic: USER_REGISTERED_TOPIC, key: created.id, payload: event },
+        });
+        return created;
+      });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         throw new ConflictException('A user with this email or Auth0 id already exists');
@@ -26,7 +33,7 @@ export class UsersService {
       throw e; // anything else is a real, unexpected error → let it be a 500
     }
 
-    await this.publishUserRegistered(user);
+    void this.outbox.flush(); // send the event now instead of waiting for the next poll
     return user;
   }
 
@@ -42,19 +49,24 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { auth0Id } });
   }
 
-  // The user is already saved, so a Kafka failure must not turn this request into an error.
-  // Known gap: if this fails, the event is lost. The outbox pattern fixes that later.
-  private async publishUserRegistered(user: User) {
-    const event: UserRegisteredEvent = {
+  async updateByAuth0Id(auth0Id: string, data: UpdateUserDto) {
+    try {
+      return await this.prisma.user.update({ where: { auth0Id }, data });
+    } catch (e) {
+      // P2025 = no row matched the where
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+        throw new NotFoundException(`No user linked to ${auth0Id}`);
+      }
+      throw e;
+    }
+  }
+
+  private userRegistered(user: User): UserRegisteredEvent {
+    return {
       eventId: randomUUID(),
       type: 'user.registered',
       occurredAt: new Date().toISOString(),
       data: { userId: user.id, auth0Id: user.auth0Id, email: user.email, name: user.name },
     };
-    try {
-      await this.events.publish(USER_REGISTERED_TOPIC, user.id, event);
-    } catch (e) {
-      this.logger.error(`Failed to publish user.registered for ${user.id}`, e as Error);
-    }
   }
 }

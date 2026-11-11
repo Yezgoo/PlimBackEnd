@@ -12,6 +12,7 @@ describe('UsersController', () => {
     findAll: vi.fn(),
     findOne: vi.fn(),
     findByAuth0Id: vi.fn(),
+    updateByAuth0Id: vi.fn(),
   };
 
   beforeEach(async () => {

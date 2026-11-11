@@ -2,11 +2,12 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { Admin, Producer, stringSerializers } from '@platformatic/kafka';
 import { USER_REGISTERED_TOPIC } from './user-events.js';
 
-// Sends events to Kafka. The rest of users-service only calls publish().
+// Sends events to Kafka. Only OutboxRelay calls publish(); the rest of users-service writes to the outbox.
 @Injectable()
 export class EventsPublisher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EventsPublisher.name);
   private readonly brokers = (process.env.KAFKA_BROKERS ?? 'localhost:9092').split(',');
+  private topicsReady = false;
 
   private readonly producer = new Producer({
     clientId: 'users-service',
@@ -14,18 +15,12 @@ export class EventsPublisher implements OnModuleInit, OnModuleDestroy {
     serializers: stringSerializers,
   });
 
-  // Create the topics this service owns, if they don't exist yet
+  // Kafka being down must not stop users-service from starting: events wait in the outbox
   async onModuleInit() {
-    const admin = new Admin({ clientId: 'users-service-admin', bootstrapBrokers: this.brokers });
     try {
-      const existing = await admin.listTopics();
-      const missing = [USER_REGISTERED_TOPIC].filter((topic) => !existing.includes(topic));
-      if (missing.length) {
-        await admin.createTopics({ topics: missing, partitions: 3, replicas: 1 });
-        this.logger.log(`Created topics: ${missing.join(', ')}`);
-      }
-    } finally {
-      await admin.close();
+      await this.ensureTopics();
+    } catch (e) {
+      this.logger.warn(`Kafka not reachable yet, will retry when publishing: ${(e as Error).message}`);
     }
   }
 
@@ -34,9 +29,27 @@ export class EventsPublisher implements OnModuleInit, OnModuleDestroy {
   }
 
   // key: messages with the same key go to the same partition, so they stay in order
-  async publish(topic: string, key: string, event: object) {
+  async publish(topic: string, key: string, event: unknown) {
+    await this.ensureTopics();
     await this.producer.send({
       messages: [{ topic, key, value: JSON.stringify(event) }],
     });
+  }
+
+  // Create the topics this service owns, if they don't exist yet
+  private async ensureTopics() {
+    if (this.topicsReady) return;
+    const admin = new Admin({ clientId: 'users-service-admin', bootstrapBrokers: this.brokers });
+    try {
+      const existing = await admin.listTopics();
+      const missing = [USER_REGISTERED_TOPIC].filter((topic) => !existing.includes(topic));
+      if (missing.length) {
+        await admin.createTopics({ topics: missing, partitions: 3, replicas: 1 });
+        this.logger.log(`Created topics: ${missing.join(', ')}`);
+      }
+      this.topicsReady = true;
+    } finally {
+      await admin.close();
+    }
   }
 }
