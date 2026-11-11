@@ -100,6 +100,34 @@ describe('UsersClient', () => {
     await expect(client.deleteDocument('auth0|me', 'doc-1')).resolves.toBeUndefined();
   });
 
+  it('admin decisions carry the admin id from the token, not one sent by the browser', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse(200, {}));
+    const sneaky = { decision: 'accepted' as const, reviewedBy: 'auth0|someone-else' };
+
+    await client.adminReviewDocument('auth0|admin', 'pro-1', 'doc-1', sneaky);
+    await client.adminApproveProfessional('auth0|admin', 'pro-1');
+    await client.adminRejectProfessional('auth0|admin', 'pro-1', 'Seguro caducado');
+
+    const calls = fetchMock.mock.calls.map(([url, init]) => [url.replace('http://users.test', ''), JSON.parse(init.body)]);
+    expect(calls).toEqual([
+      ['/admin/professionals/pro-1/documents/doc-1/review', { decision: 'accepted', reviewedBy: 'auth0|admin' }],
+      ['/admin/professionals/pro-1/approve', { reviewedBy: 'auth0|admin' }],
+      ['/admin/professionals/pro-1/reject', { reason: 'Seguro caducado', reviewedBy: 'auth0|admin' }],
+    ]);
+  });
+
+  it('adminListProfessionals() filters by status when asked', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse(200, []));
+
+    await client.adminListProfessionals();
+    await client.adminListProfessionals('applied');
+
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      'http://users.test/admin/professionals',
+      'http://users.test/admin/professionals?status=applied',
+    ]);
+  });
+
   it('passes error statuses from users-service through', async () => {
     fetchMock.mockResolvedValue(jsonResponse(409, { statusCode: 409, message: 'duplicate' }));
 

@@ -51,6 +51,17 @@ export type ProDocument = {
   createdAt: string;
 };
 export type RequestUploadInput = { type: ProDocument['type']; contentType: string; sizeBytes: number; fileName?: string };
+// what an admin sees: the application, who applied, their documents and what is still missing
+export type AdminProfessional = ProfessionalProfile & {
+  rejectionReason: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  user: { id: string; auth0Id: string; email: string; name: string | null; phone: string | null };
+  documents: (ProDocument & { reviewedBy: string | null; reviewedAt: string | null })[];
+  missingDocuments: ProDocument['type'][];
+};
+export type ReviewDocumentInput = { decision: 'accepted' | 'rejected'; reason?: string };
+
 // where and how the app must upload the file
 export type UploadTicket = {
   document: ProDocument;
@@ -109,6 +120,42 @@ export class UsersClient {
 
   async deleteDocument(auth0Id: string, documentId: string): Promise<void> {
     await this.request(`${this.documentsPath(auth0Id)}/${encodeURIComponent(documentId)}`, { method: 'DELETE' });
+  }
+
+  // --- admin: reviewing applications. `adminId` is the admin's Auth0 id, taken from their token. ---
+
+  adminListProfessionals(status?: string): Promise<AdminProfessional[]> {
+    return this.request(`/admin/professionals${status ? `?status=${encodeURIComponent(status)}` : ''}`);
+  }
+
+  adminFindProfessional(id: string): Promise<AdminProfessional> {
+    return this.request(this.adminPath(id));
+  }
+
+  adminDocumentDownloadUrl(id: string, documentId: string): Promise<{ url: string; expiresInSeconds: number }> {
+    return this.request(`${this.adminPath(id)}/documents/${encodeURIComponent(documentId)}/download-url`);
+  }
+
+  adminReviewDocument(adminId: string, id: string, documentId: string, input: ReviewDocumentInput): Promise<AdminProfessional> {
+    return this.request(`${this.adminPath(id)}/documents/${encodeURIComponent(documentId)}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ ...input, reviewedBy: adminId }), // reviewedBy last: the browser can't choose it
+    });
+  }
+
+  adminApproveProfessional(adminId: string, id: string): Promise<AdminProfessional> {
+    return this.request(`${this.adminPath(id)}/approve`, { method: 'POST', body: JSON.stringify({ reviewedBy: adminId }) });
+  }
+
+  adminRejectProfessional(adminId: string, id: string, reason: string): Promise<AdminProfessional> {
+    return this.request(`${this.adminPath(id)}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason, reviewedBy: adminId }),
+    });
+  }
+
+  private adminPath(professionalId: string) {
+    return `/admin/professionals/${encodeURIComponent(professionalId)}`;
   }
 
   private documentsPath(auth0Id: string) {

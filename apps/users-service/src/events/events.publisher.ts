@@ -1,6 +1,10 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Admin, Producer, stringSerializers } from '@platformatic/kafka';
+import { PROFESSIONAL_APPROVED_TOPIC, PROFESSIONAL_REJECTED_TOPIC } from './professional-events.js';
 import { USER_REGISTERED_TOPIC } from './user-events.js';
+
+// Every topic users-service publishes to. Add new ones here so they get created.
+const OWNED_TOPICS = [USER_REGISTERED_TOPIC, PROFESSIONAL_APPROVED_TOPIC, PROFESSIONAL_REJECTED_TOPIC];
 
 // Sends events to Kafka. Only OutboxRelay calls publish(); the rest of users-service writes to the outbox.
 @Injectable()
@@ -42,7 +46,7 @@ export class EventsPublisher implements OnModuleInit, OnModuleDestroy {
     const admin = new Admin({ clientId: 'users-service-admin', bootstrapBrokers: this.brokers });
     try {
       const existing = await admin.listTopics();
-      const missing = [USER_REGISTERED_TOPIC].filter((topic) => !existing.includes(topic));
+      const missing = OWNED_TOPICS.filter((topic) => !existing.includes(topic));
       if (missing.length) {
         await admin.createTopics({ topics: missing, partitions: 3, replicas: 1 });
         this.logger.log(`Created topics: ${missing.join(', ')}`);

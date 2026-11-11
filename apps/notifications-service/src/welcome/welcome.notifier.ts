@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { UserRegisteredEvent } from '../events/user-events.js';
+import type { UserRegisteredEvent } from '../events/incoming-events.js';
 
 // What notifications-service does when someone registers. For now it only logs;
 // a real email/push provider plugs in here later.

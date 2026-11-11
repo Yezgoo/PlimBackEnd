@@ -1,12 +1,13 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { Consumer, stringDeserializers, type MessagesStream } from '@platformatic/kafka';
+import { ProfessionalNotifier } from '../professionals/professional.notifier.js';
 import { WelcomeNotifier } from '../welcome/welcome.notifier.js';
-import { USER_REGISTERED_TOPIC, type UserRegisteredEvent } from './user-events.js';
+import { SUBSCRIBED_TOPICS, type IncomingEvent } from './incoming-events.js';
 
-// Reads user.registered events and hands each one to WelcomeNotifier.
+// Reads the events this service cares about and hands each one to the right notifier.
 @Injectable()
-export class UserRegisteredConsumer implements OnApplicationBootstrap, OnModuleDestroy {
-  private readonly logger = new Logger(UserRegisteredConsumer.name);
+export class EventsConsumer implements OnApplicationBootstrap, OnModuleDestroy {
+  private readonly logger = new Logger(EventsConsumer.name);
 
   private readonly consumer = new Consumer({
     // Kafka remembers how far each group has read. Every copy of notifications-service
@@ -19,16 +20,19 @@ export class UserRegisteredConsumer implements OnApplicationBootstrap, OnModuleD
 
   private stream?: MessagesStream<string, string, string, string>;
 
-  constructor(private readonly welcome: WelcomeNotifier) {}
+  constructor(
+    private readonly welcome: WelcomeNotifier,
+    private readonly professionals: ProfessionalNotifier,
+  ) {}
 
   async onApplicationBootstrap() {
     this.stream = await this.consumer.consume({
-      topics: [USER_REGISTERED_TOPIC],
+      topics: SUBSCRIBED_TOPICS,
       autocommit: false,     // we commit ourselves, only after handling a message
       mode: 'committed',     // continue where this group stopped last time...
       fallbackMode: 'earliest', // ...or, the very first time, from the oldest message
     });
-    this.logger.log(`Listening to ${USER_REGISTERED_TOPIC}`);
+    this.logger.log(`Listening to ${SUBSCRIBED_TOPICS.join(', ')}`);
 
     // don't await: the loop runs for as long as the service is up
     void this.readLoop(this.stream);
@@ -51,7 +55,7 @@ export class UserRegisteredConsumer implements OnApplicationBootstrap, OnModuleD
   }
 
   async handle(raw: string) {
-    let event: UserRegisteredEvent;
+    let event: IncomingEvent;
     try {
       event = JSON.parse(raw);
     } catch {
@@ -61,7 +65,16 @@ export class UserRegisteredConsumer implements OnApplicationBootstrap, OnModuleD
     }
 
     try {
-      await this.welcome.onUserRegistered(event);
+      switch (event.type) {
+        case 'user.registered':
+          return await this.welcome.onUserRegistered(event);
+        case 'professional.approved':
+          return await this.professionals.onApproved(event);
+        case 'professional.rejected':
+          return await this.professionals.onRejected(event);
+        default:
+          this.logger.warn(`No handler for event type ${(event as { type?: string }).type}`);
+      }
     } catch (e) {
       // keep going for now; retries and a dead-letter topic come later
       this.logger.error(`Failed to handle event ${event.eventId}`, e as Error);

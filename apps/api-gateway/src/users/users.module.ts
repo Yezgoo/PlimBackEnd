@@ -7,5 +7,6 @@ import { UsersClient } from './users.client.js';
 @Module({
   controllers: [MeController, MeProfessionalController, MeDocumentsController],
   providers: [UsersClient],
+  exports: [UsersClient], // the admin module uses it too
 })
 export class UsersModule {}

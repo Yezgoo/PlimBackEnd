@@ -40,6 +40,9 @@ model Professional {
   bio                 String?
   status              ProfessionalStatus @default(applied)
   verifiedAt          DateTime?          @map("verified_at")          // set on approval: the "Verificado" badge
+  rejectionReason     String?            @map("rejection_reason")     // shown to the applicant
+  reviewedBy          String?            @map("reviewed_by")          // the admin's Auth0 id
+  reviewedAt          DateTime?          @map("reviewed_at")
   ratingAvg           Decimal?           @map("rating_avg") @db.Decimal(3, 2) // kept up to date from reviews
   ratingCount         Int                @default(0) @map("rating_count")
   createdAt           DateTime           @default(now()) @map("created_at")
@@ -77,7 +80,7 @@ model ProDocument {
   sizeBytes       Int               @map("size_bytes")
   status          ProDocumentStatus @default(uploading)
   rejectionReason String?           @map("rejection_reason")
-  reviewedBy      String?           @map("reviewed_by") @db.Uuid // the admin's user id
+  reviewedBy      String?           @map("reviewed_by")          // the admin's Auth0 id (admins need no Plim profile)
   reviewedAt      DateTime?         @map("reviewed_at")
   createdAt       DateTime          @default(now()) @map("created_at")
   updatedAt       DateTime          @updatedAt @map("updated_at")

@@ -114,6 +114,25 @@ describe('ProfessionalsService', () => {
       await expect(service.update('auth0|1', { nif: '999999990' })).resolves.toMatchObject({ nif: '999999990' });
     });
 
+    it('sends a rejected application back to the queue when it is edited', async () => {
+      prismaMock.professional.findFirst.mockResolvedValue(stored({ status: 'rejected', rejectionReason: 'Bio vazia' }));
+      prismaMock.professional.update.mockResolvedValue(stored({ status: 'applied' }));
+
+      await service.update('auth0|1', { bio: 'Canalizador' });
+
+      expect(prismaMock.professional.update.mock.calls[0][0].data).toMatchObject({
+        bio: 'Canalizador',
+        status: 'applied',
+        rejectionReason: null,
+      });
+    });
+
+    it('never tells the applicant which admin reviewed them', async () => {
+      prismaMock.professional.findFirst.mockResolvedValue(stored({ status: 'rejected', reviewedBy: 'auth0|admin' }));
+
+      expect(await service.findByAuth0Id('auth0|1')).not.toHaveProperty('reviewedBy');
+    });
+
     it('refuses a NIF change after approval', async () => {
       prismaMock.professional.findFirst.mockResolvedValue(stored({ status: 'approved' }));
 

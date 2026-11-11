@@ -43,7 +43,12 @@ export class ProfessionalsService {
     try {
       const professional = await this.prisma.professional.update({
         where: { id: current.id },
-        data: { ...dto, insuranceValidUntil: toDate(dto.insuranceValidUntil) },
+        data: {
+          ...dto,
+          insuranceValidUntil: toDate(dto.insuranceValidUntil),
+          // fixing a rejected application sends it back to the admins' queue
+          ...(current.status === 'rejected' ? { status: 'applied', rejectionReason: null } : {}),
+        },
       });
       return this.present(professional);
     } catch (e) {
@@ -64,8 +69,9 @@ export class ProfessionalsService {
     return e;
   }
 
-  // Plain values for JSON: the date as "2027-12-31", the rating as a number
-  private present(professional: Professional) {
+  // Plain values for JSON: the date as "2027-12-31", the rating as a number.
+  // Which admin reviewed the application stays internal.
+  private present({ reviewedBy: _reviewedBy, ...professional }: Professional) {
     return {
       ...professional,
       insuranceValidUntil: professional.insuranceValidUntil?.toISOString().slice(0, 10) ?? null,

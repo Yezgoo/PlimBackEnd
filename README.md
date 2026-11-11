@@ -17,7 +17,7 @@ tested with Vitest.
 | `apps/api-gateway` | The only public entry point. Verifies Auth0 tokens on every route (unless marked `@Public()`), forwards `/me` to users-service. |
 | `apps/users-service` | Owns the `users` table. Only accepts calls carrying the gateway's `X-Internal-Token`. Writes `user.registered` events to an outbox, which a relay sends to Kafka. |
 | `apps/catalog-service` | Owns categories and fixed-price services (price incl. VAT, includes / excludes, FAQ). Read-only for now; same `X-Internal-Token` rule. Port 3002, database `catalog_db`. |
-| `apps/notifications-service` | No HTTP. Consumes `user.registered` (for now it logs the welcome email it would send). |
+| `apps/notifications-service` | No HTTP. Consumes `user.registered`, `professional.approved` and `professional.rejected` (for now it logs the message it would send). |
 
 ## Requirements
 
@@ -77,6 +77,12 @@ Try requests with the REST Client files in `http/` (`gateway.http` for the publi
 | GET | `/me/professional/documents/:id/download-url` | logged-in person | Short-lived link to view the file |
 | DELETE | `/me/professional/documents/:id` | logged-in person | Delete a document (not once accepted) |
 | GET | `/admin/me` | admin | Confirms the caller is an admin; returns their permissions |
+| GET | `/admin/professionals` | admin | Applications, oldest first; `?status=applied` is the review queue |
+| GET | `/admin/professionals/:id` | admin | One application: the person, their documents, which required documents are missing |
+| GET | `/admin/professionals/:id/documents/:documentId/download-url` | admin | Short-lived link to look at a document |
+| POST | `/admin/professionals/:id/documents/:documentId/review` | admin | `{ decision: "accepted" \| "rejected", reason? }` (reason required when rejecting) |
+| POST | `/admin/professionals/:id/approve` | admin | Approve: needs an accepted `id_card` and `activity_proof`; sets the Verificado mark |
+| POST | `/admin/professionals/:id/reject` | admin | `{ reason }`, shown to the applicant |
 
 "Admin" means the token carries the `admin:access` permission (see below). Everything under `/admin` requires it, whether or not the route says so.
 
@@ -126,5 +132,7 @@ Each service has its own schema and scripts (`db:users:*`, `db:catalog:*`). For 
 | Topic | Producer | Consumers |
 |---|---|---|
 | `user.registered` | users-service (via outbox) | notifications-service |
+| `professional.approved` | users-service (via outbox) | notifications-service |
+| `professional.rejected` | users-service (via outbox) | notifications-service |
 
 Events are delivered at least once: an event can arrive twice, so consumers should ignore an `eventId` they already handled.

@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
-import { UserRegisteredConsumer } from './events/user-registered.consumer.js';
+import { EventsConsumer } from './events/events.consumer.js';
+import { ProfessionalNotifier } from './professionals/professional.notifier.js';
 import { WelcomeNotifier } from './welcome/welcome.notifier.js';
 
 @Module({
-  providers: [UserRegisteredConsumer, WelcomeNotifier],
+  providers: [EventsConsumer, WelcomeNotifier, ProfessionalNotifier],
 })
 export class NotificationsServiceModule {}

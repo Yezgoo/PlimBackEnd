@@ -102,6 +102,32 @@ Authorization: Bearer {{token}}
 GET http://localhost:3000/admin/me
 Authorization: Bearer {{token}}
 
+### Admin: applications waiting for review (oldest first)
+GET http://localhost:3000/admin/professionals?status=applied
+Authorization: Bearer {{token}}
+
+### Admin: one application, with documents and what is still missing
+GET http://localhost:3000/admin/professionals/PASTE-PROFESSIONAL-ID
+Authorization: Bearer {{token}}
+
+### Admin: accept (or reject, with a reason) one document
+POST http://localhost:3000/admin/professionals/PASTE-PROFESSIONAL-ID/documents/PASTE-DOCUMENT-ID/review
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "decision": "accepted" }
+
+### Admin: approve → 200, or 409 while a required document has no accepted file
+POST http://localhost:3000/admin/professionals/PASTE-PROFESSIONAL-ID/approve
+Authorization: Bearer {{token}}
+
+### Admin: reject, with a reason the applicant will see
+POST http://localhost:3000/admin/professionals/PASTE-PROFESSIONAL-ID/reject
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "reason": "O comprovativo de atividade está ilegível. Envia uma nova fotografia." }
+
 ### Stop users-service, then → 503
 GET http://localhost:3000/me
 Authorization: Bearer {{token}}

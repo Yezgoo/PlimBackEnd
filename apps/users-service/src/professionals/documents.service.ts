@@ -59,6 +59,11 @@ export class DocumentsService {
     }
 
     const confirmed = await this.prisma.proDocument.update({ where: { id: document.id }, data: { status: 'pending' } });
+    // a new document from a rejected applicant sends the application back to the admins' queue
+    await this.prisma.professional.updateMany({
+      where: { id: document.professionalId, status: 'rejected' },
+      data: { status: 'applied', rejectionReason: null },
+    });
     return this.present(confirmed);
   }
 
@@ -101,8 +106,9 @@ export class DocumentsService {
     return document;
   }
 
-  // The storage path stays inside the backend: the app only ever gets signed links
-  private present({ fileKey: _fileKey, ...document }: ProDocument) {
+  // The storage path stays inside the backend (the app only ever gets signed links),
+  // and so does which admin reviewed the document
+  private present({ fileKey: _fileKey, reviewedBy: _reviewedBy, ...document }: ProDocument) {
     return document;
   }
 }

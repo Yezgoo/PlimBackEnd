@@ -21,7 +21,7 @@ const stored = (overrides = {}) => ({
 
 describe('DocumentsService', () => {
   const prismaMock = {
-    professional: { findFirst: vi.fn() },
+    professional: { findFirst: vi.fn(), updateMany: vi.fn() },
     proDocument: { count: vi.fn(), create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn(), delete: vi.fn() },
   };
   const storageMock = { uploadUrl: vi.fn(), downloadUrl: vi.fn(), stat: vi.fn(), remove: vi.fn() };
@@ -83,6 +83,11 @@ describe('DocumentsService', () => {
 
       expect(prismaMock.proDocument.update).toHaveBeenCalledWith({ where: { id: 'doc-1' }, data: { status: 'pending' } });
       expect(result.status).toBe('pending');
+      // and a rejected application goes back to the queue (no effect on any other status)
+      expect(prismaMock.professional.updateMany).toHaveBeenCalledWith({
+        where: { id: 'pro-1', status: 'rejected' },
+        data: { status: 'applied', rejectionReason: null },
+      });
     });
 
     it('refuses when nothing was uploaded', async () => {
@@ -128,12 +133,13 @@ describe('DocumentsService', () => {
     await expect(service.downloadUrl('auth0|1', 'doc-1')).resolves.toMatchObject({ url: 'https://bucket.example/signed-get' });
   });
 
-  it('list() never includes the storage path', async () => {
-    prismaMock.proDocument.findMany.mockResolvedValue([stored({ status: 'pending' })]);
+  it('list() never includes the storage path or who reviewed it', async () => {
+    prismaMock.proDocument.findMany.mockResolvedValue([stored({ status: 'rejected', reviewedBy: 'auth0|admin' })]);
 
     const [document] = await service.list('auth0|1');
 
     expect(document).not.toHaveProperty('fileKey');
+    expect(document).not.toHaveProperty('reviewedBy');
     expect(document.fileName).toBe('cc.pdf');
   });
 
