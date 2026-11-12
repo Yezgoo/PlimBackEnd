@@ -16,6 +16,9 @@ GET http://localhost:3000/catalog/services?category=canalizacao
 ### Catalog: one service page
 GET http://localhost:3000/catalog/services/desentupimento-lavatorio-sanita
 
+### Catalog: municipalities (pilot = bookings open there)
+GET http://localhost:3000/catalog/municipalities
+
 ### Catalog: is this postal code served? (Coimbra is the pilot)
 GET http://localhost:3000/catalog/areas/3000-123
 
@@ -101,6 +104,42 @@ Authorization: Bearer {{token}}
 ### Am I an admin? → 200 with my permissions, 403 without the admin role (see README "Admins")
 GET http://localhost:3000/admin/me
 Authorization: Bearer {{token}}
+
+### Work settings: where, what and when I work
+GET http://localhost:3000/me/professional/work-settings
+Authorization: Bearer {{token}}
+
+### Where I work (replaces the list; codes from GET /catalog/municipalities)
+PUT http://localhost:3000/me/professional/areas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "municipalityCodes": ["0603"] }
+
+### What I do (replaces the list; ids from GET /catalog/services)
+PUT http://localhost:3000/me/professional/services
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "serviceTypeIds": ["PASTE-SERVICE-ID"] }
+
+### My weekly timetable (replaces the week; weekday 1 = Monday ... 7 = Sunday)
+PUT http://localhost:3000/me/professional/availability
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "slots": [
+  { "weekday": 1, "start": "09:00", "end": "13:00" },
+  { "weekday": 1, "start": "14:00", "end": "18:00" },
+  { "weekday": 6, "start": "10:00", "end": "13:00" }
+] }
+
+### Time off
+POST http://localhost:3000/me/professional/time-off
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "startsAt": "2027-08-01T00:00:00Z", "endsAt": "2027-08-15T00:00:00Z", "reason": "Férias" }
 
 ### Admin: applications waiting for review (oldest first)
 GET http://localhost:3000/admin/professionals?status=applied

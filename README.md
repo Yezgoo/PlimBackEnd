@@ -62,6 +62,7 @@ Try requests with the REST Client files in `http/` (`gateway.http` for the publi
 | GET | `/catalog/categories` | public | Active categories |
 | GET | `/catalog/services` | public | Active services; `?category=<slug>` filters |
 | GET | `/catalog/services/:slug` | public | One service: price, includes, excludes, FAQ |
+| GET | `/catalog/municipalities` | public | Municipalities we know, with a `pilot` flag (for the "where do you work?" picker) |
 | GET | `/catalog/areas/:postalCode` | public | Municipality of a postal code, and whether bookings are open there |
 | GET | `/catalog/search` | public | Home search: `?q=<text>&postalCode=<code>` (both optional) |
 | GET | `/whoami` | any valid token | Claims of the caller's token |
@@ -76,6 +77,12 @@ Try requests with the REST Client files in `http/` (`gateway.http` for the publi
 | POST | `/me/professional/documents/:id/confirm` | logged-in person | After uploading: checks the file arrived, marks it `pending` |
 | GET | `/me/professional/documents/:id/download-url` | logged-in person | Short-lived link to view the file |
 | DELETE | `/me/professional/documents/:id` | logged-in person | Delete a document (not once accepted) |
+| GET | `/me/professional/work-settings` | logged-in person | Where, what and when the caller works: municipalities, services, weekly timetable, upcoming time off |
+| PUT | `/me/professional/areas` | logged-in person | `{ municipalityCodes: ["0603"] }` replaces the list; codes must exist in the catalog |
+| PUT | `/me/professional/services` | logged-in person | `{ serviceTypeIds: [...] }` replaces the list; ids must exist in the catalog |
+| PUT | `/me/professional/availability` | logged-in person | `{ slots: [{ weekday, start, end }] }` replaces the week. `weekday` 1 = Monday ... 7 = Sunday, times `HH:MM` in Lisbon time, blocks may not overlap |
+| POST | `/me/professional/time-off` | logged-in person | `{ startsAt, endsAt, reason? }` |
+| DELETE | `/me/professional/time-off/:id` | logged-in person | Remove a time-off period |
 | GET | `/admin/me` | admin | Confirms the caller is an admin; returns their permissions |
 | GET | `/admin/professionals` | admin | Applications, oldest first; `?status=applied` is the review queue |
 | GET | `/admin/professionals/:id` | admin | One application: the person, their documents, which required documents are missing |
