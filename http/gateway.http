@@ -136,6 +136,18 @@ Authorization: Bearer {{token}}
 GET http://localhost:3000/bookings/PASTE-BOOKING-ID
 Authorization: Bearer {{token}}
 
+### Job offers waiting for my answer (as a professional)
+GET http://localhost:3000/me/professional/offers?status=pending
+Authorization: Bearer {{token}}
+
+### Take a job (the answer includes the full address)
+POST http://localhost:3000/me/professional/offers/PASTE-OFFER-ID/accept
+Authorization: Bearer {{token}}
+
+### Pass on a job (the next professional is asked)
+POST http://localhost:3000/me/professional/offers/PASTE-OFFER-ID/decline
+Authorization: Bearer {{token}}
+
 ### Work settings: where, what and when I work
 GET http://localhost:3000/me/professional/work-settings
 Authorization: Bearer {{token}}

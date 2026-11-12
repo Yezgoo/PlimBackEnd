@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { BookingsService } from './bookings.service.js';
+import { OffersService } from '../offers/offers.service.js';
 import type { CreateBookingDto } from './dto/create-booking.dto.js';
 
 // "now" is fixed, so the date rules can be tested exactly
@@ -26,7 +27,8 @@ const dto = (overrides: Partial<CreateBookingDto> = {}): CreateBookingDto => ({
 });
 
 describe('BookingsService', () => {
-  const prismaMock = { booking: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn() } };
+  const prismaMock = { booking: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn(), findUniqueOrThrow: vi.fn() } };
+  const offersMock = { start: vi.fn() };
   let service: BookingsService;
 
   beforeEach(() => {
@@ -35,7 +37,10 @@ describe('BookingsService', () => {
     vi.setSystemTime(NOW);
     prismaMock.booking.findFirst.mockResolvedValue(null);
     prismaMock.booking.create.mockImplementation(async ({ data }) => ({ id: 'booking-1', status: 'pending_payment', ...data, vatRate: new Prisma.Decimal(data.vatRate) }));
-    service = new BookingsService(prismaMock as unknown as PrismaService);
+    // after dispatch starts, the booking is read again: by default hand back what was created
+    prismaMock.booking.findUniqueOrThrow.mockImplementation(async () => prismaMock.booking.create.mock.results[0].value);
+    delete process.env.PAYMENTS_REQUIRED;
+    service = new BookingsService(prismaMock as unknown as PrismaService, offersMock as unknown as OffersService);
   });
 
   afterEach(() => vi.useRealTimers());
@@ -69,6 +74,27 @@ describe('BookingsService', () => {
         toStatus: 'pending_payment',
         changedBy: '11111111-1111-4111-8111-111111111111',
       });
+    });
+
+    it('starts looking for a professional right away while payments are not required', async () => {
+      await service.create(dto());
+
+      expect(offersMock.start).toHaveBeenCalledWith('booking-1');
+    });
+
+    it('waits for the payment when PAYMENTS_REQUIRED is on', async () => {
+      process.env.PAYMENTS_REQUIRED = 'true';
+
+      const result = await service.create(dto());
+
+      expect(offersMock.start).not.toHaveBeenCalled();
+      expect(result.status).toBe('pending_payment');
+    });
+
+    it('still creates the booking when no professional can be asked yet', async () => {
+      offersMock.start.mockRejectedValueOnce(new Error('users-service is unavailable'));
+
+      await expect(service.create(dto())).resolves.toMatchObject({ id: 'booking-1' });
     });
 
     it('refuses the same service at the same time twice (double tap)', async () => {

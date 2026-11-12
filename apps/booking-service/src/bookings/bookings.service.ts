@@ -1,6 +1,7 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
 import type { Booking } from '../generated/prisma/client.js';
+import { OffersService } from '../offers/offers.service.js';
 import type { CreateBookingDto } from './dto/create-booking.dto.js';
 
 // When a job may be booked for
@@ -12,7 +13,12 @@ const MINUTE = 60_000;
 
 @Injectable()
 export class BookingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(BookingsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly offers: OffersService,
+  ) {}
 
   // The last step of the booking screens: "this is what you are about to book". Saves nothing.
   preview(dto: CreateBookingDto) {
@@ -64,6 +70,18 @@ export class BookingsService {
         events: { create: { fromStatus: null, toStatus: 'pending_payment', changedBy: dto.customerId } },
       },
     });
+
+    // Until payments exist (roadmap step 12), a new booking goes straight to finding a professional.
+    // With PAYMENTS_REQUIRED=true it waits in "pending_payment" for the payment to arrive first.
+    if (process.env.PAYMENTS_REQUIRED !== 'true') {
+      try {
+        await this.offers.start(booking.id);
+      } catch (e) {
+        // the booking exists; the sweeper will ask a professional as soon as it can
+        this.logger.warn(`Booking ${booking.id} created, but no professional could be asked yet: ${(e as Error).message}`);
+      }
+      return this.present(await this.prisma.booking.findUniqueOrThrow({ where: { id: booking.id } }));
+    }
     return this.present(booking);
   }
 

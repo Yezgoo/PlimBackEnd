@@ -52,6 +52,29 @@ export type Booking = {
   events?: { fromStatus: BookingStatus | null; toStatus: BookingStatus; at: string }[];
 };
 
+// A job offered to a professional. The full address and the notes are only filled in once accepted.
+export type JobOffer = {
+  id: string;
+  status: 'pending' | 'accepted' | 'declined' | 'expired';
+  offeredAt: string;
+  expiresAt: string;
+  respondedAt: string | null;
+  booking: {
+    id: string;
+    status: BookingStatus;
+    serviceName: string;
+    durationMinutes: number;
+    scheduledStart: string;
+    scheduledEnd: string;
+    priceCents: number;
+    currency: string;
+    city: string;
+    postalArea: string;
+    address: BookingAddress | null;
+    notes: string | null;
+  };
+};
+
 // Talks to booking-service over plain HTTP.
 @Injectable()
 export class BookingsClient {
@@ -71,6 +94,26 @@ export class BookingsClient {
 
   findForCustomer(id: string, customerId: string): Promise<Booking> {
     return this.request(`/bookings/${encodeURIComponent(id)}?customerId=${encodeURIComponent(customerId)}`);
+  }
+
+  // --- job offers, as the professional sees them ---
+
+  listOffers(professionalId: string, status?: string): Promise<JobOffer[]> {
+    const filter = status ? `&status=${encodeURIComponent(status)}` : '';
+    return this.request(`/offers?professionalId=${encodeURIComponent(professionalId)}${filter}`);
+  }
+
+  acceptOffer(offerId: string, professionalId: string): Promise<JobOffer> {
+    return this.answerOffer(offerId, professionalId, 'accept');
+  }
+
+  declineOffer(offerId: string, professionalId: string): Promise<JobOffer> {
+    return this.answerOffer(offerId, professionalId, 'decline');
+  }
+
+  private answerOffer(offerId: string, professionalId: string, answer: 'accept' | 'decline'): Promise<JobOffer> {
+    const path = `/offers/${encodeURIComponent(offerId)}/${answer}?professionalId=${encodeURIComponent(professionalId)}`;
+    return this.request(path, { method: 'POST' });
   }
 
   private request<T>(path: string, init?: RequestInit): Promise<T> {

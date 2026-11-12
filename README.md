@@ -17,7 +17,7 @@ tested with Vitest.
 | `apps/api-gateway` | The only public entry point. Verifies Auth0 tokens on every route (unless marked `@Public()`), forwards `/me` to users-service. |
 | `apps/users-service` | Owns the `users` table. Only accepts calls carrying the gateway's `X-Internal-Token`. Writes `user.registered` events to an outbox, which a relay sends to Kafka. |
 | `apps/catalog-service` | Owns categories and fixed-price services (price incl. VAT, includes / excludes, FAQ). Read-only for now; same `X-Internal-Token` rule. Port 3002, database `catalog_db`. |
-| `apps/booking-service` | Owns bookings and their status history. A booking keeps its own copy of the service name, price and address. Port 3003, database `bookings_db`. |
+| `apps/booking-service` | Owns bookings, their status history and the offers made to professionals (it asks users-service who is eligible). A booking keeps its own copy of the service name, price and address. Port 3003, database `bookings_db`. |
 | `apps/notifications-service` | No HTTP. Consumes `user.registered`, `professional.approved` and `professional.rejected` (for now it logs the message it would send). |
 
 ## Requirements
@@ -91,6 +91,9 @@ Try requests with the REST Client files in `http/` (`gateway.http` for the publi
 | POST | `/bookings` | logged-in person | Same body: books it (status `pending_payment`). The price comes from the catalog, never from the app |
 | GET | `/bookings` | logged-in person | Caller's bookings, latest first |
 | GET | `/bookings/:id` | logged-in person | One of the caller's bookings, with its status history |
+| GET | `/me/professional/offers` | logged-in person | Jobs offered to the caller as a professional; `?status=pending` for the ones waiting for an answer |
+| POST | `/me/professional/offers/:id/accept` | logged-in person | Take the job. The answer includes the full address and the customer's notes |
+| POST | `/me/professional/offers/:id/decline` | logged-in person | Pass: the next professional is asked |
 | GET | `/admin/me` | admin | Confirms the caller is an admin; returns their permissions |
 | GET | `/admin/professionals` | admin | Applications, oldest first; `?status=applied` is the review queue |
 | GET | `/admin/professionals/:id` | admin | One application: the person, their documents, which required documents are missing |
@@ -119,8 +122,21 @@ The person must log in again to get a token with the permission. In the gateway,
 
 A booking can be made for a fixed-price service, in a postal code where bookings are open, starting
 at least 2 hours from now, at most 90 days ahead, on a quarter of an hour. Booking the same service
-for the same time twice answers 409. Until payments exist (roadmap step 12) a booking stays in
-`pending_payment`.
+for the same time twice answers 409.
+
+### Finding a professional
+
+A new booking is offered to one professional at a time (status `finding_pro`). users-service says
+who is eligible: approved, does that service, works in that municipality, has the time inside one
+block of their timetable (Lisbon time) and no time off; best-rated first. booking-service skips
+anyone already asked or busy with another job then, and never offers a booking to the customer who
+made it. Each offer has a deadline (`OFFER_TIMEOUT_MINUTES`). A decline or a missed deadline asks
+the next professional; when nobody is left, or `MAX_OFFERS` were asked, the booking is cancelled
+with reason `no_pro_found`. Before accepting, a professional sees the job, the city and the first
+four digits of the postal code; the street and the notes come with acceptance.
+
+Until payments exist (roadmap step 12) this starts as soon as the booking is created. With
+`PAYMENTS_REQUIRED=true` a booking waits in `pending_payment` instead.
 
 ## Document uploads
 
