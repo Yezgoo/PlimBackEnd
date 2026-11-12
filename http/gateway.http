@@ -105,6 +105,37 @@ Authorization: Bearer {{token}}
 GET http://localhost:3000/admin/me
 Authorization: Bearer {{token}}
 
+### Booking, summary step: what would I be booking? (saves nothing)
+POST http://localhost:3000/bookings/preview
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "serviceSlug": "desentupimento-lavatorio-sanita",
+  "address": { "street": "Rua da Sofia 10", "details": "2.º Esq.", "postalCode": "3000-389" },
+  "scheduledStart": "2026-12-01T15:00:00Z",
+  "notes": "Tocar à campainha"
+}
+
+### Booking: book it, 201 with status "pending_payment" (use a date at least 2 hours from now)
+POST http://localhost:3000/bookings
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "serviceSlug": "desentupimento-lavatorio-sanita",
+  "address": { "street": "Rua da Sofia 10", "details": "2.º Esq.", "postalCode": "3000-389" },
+  "scheduledStart": "2026-12-01T15:00:00Z"
+}
+
+### My bookings
+GET http://localhost:3000/bookings
+Authorization: Bearer {{token}}
+
+### One booking, with its status history
+GET http://localhost:3000/bookings/PASTE-BOOKING-ID
+Authorization: Bearer {{token}}
+
 ### Work settings: where, what and when I work
 GET http://localhost:3000/me/professional/work-settings
 Authorization: Bearer {{token}}

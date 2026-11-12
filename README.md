@@ -17,6 +17,7 @@ tested with Vitest.
 | `apps/api-gateway` | The only public entry point. Verifies Auth0 tokens on every route (unless marked `@Public()`), forwards `/me` to users-service. |
 | `apps/users-service` | Owns the `users` table. Only accepts calls carrying the gateway's `X-Internal-Token`. Writes `user.registered` events to an outbox, which a relay sends to Kafka. |
 | `apps/catalog-service` | Owns categories and fixed-price services (price incl. VAT, includes / excludes, FAQ). Read-only for now; same `X-Internal-Token` rule. Port 3002, database `catalog_db`. |
+| `apps/booking-service` | Owns bookings and their status history. A booking keeps its own copy of the service name, price and address. Port 3003, database `bookings_db`. |
 | `apps/notifications-service` | No HTTP. Consumes `user.registered`, `professional.approved` and `professional.rejected` (for now it logs the message it would send). |
 
 ## Requirements
@@ -33,8 +34,10 @@ cp .env.example .env          # then fill in the values (see comments in the fil
 docker compose -f infra/docker-compose.yml up -d
 npm run db:users:generate     # generate the Prisma clients
 npm run db:catalog:generate
+npm run db:bookings:generate
 npm run db:users:deploy       # create the tables in the databases from .env
 npm run db:catalog:deploy
+npm run db:bookings:deploy
 npm run db:catalog:seed      # pilot catalog: 5 categories, 5 fixed-price services, Coimbra (safe to re-run)
 ```
 
@@ -47,6 +50,7 @@ Each service in its own terminal:
 ```bash
 npm run start:users
 npm run start:catalog
+npm run start:bookings
 npm run start:notifications
 npm run start:gateway
 ```
@@ -83,6 +87,10 @@ Try requests with the REST Client files in `http/` (`gateway.http` for the publi
 | PUT | `/me/professional/availability` | logged-in person | `{ slots: [{ weekday, start, end }] }` replaces the week. `weekday` 1 = Monday ... 7 = Sunday, times `HH:MM` in Lisbon time, blocks may not overlap |
 | POST | `/me/professional/time-off` | logged-in person | `{ startsAt, endsAt, reason? }` |
 | DELETE | `/me/professional/time-off/:id` | logged-in person | Remove a time-off period |
+| POST | `/bookings/preview` | logged-in person | The summary step: `{ serviceSlug, address: { street, details?, postalCode, city? }, scheduledStart, notes? }` gives back what would be booked. Saves nothing |
+| POST | `/bookings` | logged-in person | Same body: books it (status `pending_payment`). The price comes from the catalog, never from the app |
+| GET | `/bookings` | logged-in person | Caller's bookings, latest first |
+| GET | `/bookings/:id` | logged-in person | One of the caller's bookings, with its status history |
 | GET | `/admin/me` | admin | Confirms the caller is an admin; returns their permissions |
 | GET | `/admin/professionals` | admin | Applications, oldest first; `?status=applied` is the review queue |
 | GET | `/admin/professionals/:id` | admin | One application: the person, their documents, which required documents are missing |
@@ -107,6 +115,13 @@ Admin rights come from Auth0, not from our database. One-time setup in the Auth0
 The person must log in again to get a token with the permission. In the gateway, protect a route with
 `@RequirePermissions('some:permission')`; routes under `/admin` need `admin:access` automatically.
 
+## Bookings
+
+A booking can be made for a fixed-price service, in a postal code where bookings are open, starting
+at least 2 hours from now, at most 90 days ahead, on a quarter of an hour. Booking the same service
+for the same time twice answers 409. Until payments exist (roadmap step 12) a booking stays in
+`pending_payment`.
+
 ## Document uploads
 
 Files never pass through the backend. The app asks for an upload link, PUTs the file straight to
@@ -125,7 +140,7 @@ npm run lint
 
 ## Database changes
 
-Each service has its own schema and scripts (`db:users:*`, `db:catalog:*`). For users-service:
+Each service has its own schema and scripts (`db:users:*`, `db:catalog:*`, `db:bookings:*`). For users-service:
 
 1. Edit `apps/users-service/prisma/schema.prisma`.
 2. `npm run db:users:migrate -- --name <what-changed>` (creates a migration; needs a database

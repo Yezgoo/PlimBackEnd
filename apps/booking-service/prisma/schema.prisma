@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client"                 // Prisma 7's ESM-first generator
+  output   = "../src/generated/prisma"       // generated code goes inside the service
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// The life of a booking, in order. Each step is reached in a later roadmap step.
+enum BookingStatus {
+  pending_payment  // created, waiting for the customer's payment
+  finding_pro      // paid; being offered to professionals, one at a time
+  accepted         // a professional took it
+  en_route
+  in_progress
+  done             // the professional says the work is finished
+  confirmed        // the customer confirmed (or 48 h passed): the professional gets paid
+  cancelled
+  disputed
+}
+
+// One job a customer booked. Everything agreed at checkout is COPIED here (service name, price,
+// address), so later changes to the catalog or to the customer's profile never change a booking.
+model Booking {
+  id               String        @id @default(uuid()) @db.Uuid
+  customerId       String        @map("customer_id") @db.Uuid       // users-service user id
+  professionalId   String?       @map("professional_id") @db.Uuid   // set when a professional accepts
+  serviceTypeId    String        @map("service_type_id") @db.Uuid   // catalog-service id
+  serviceSlug      String        @map("service_slug")
+  serviceName      String        @map("service_name")               // copy
+  durationMinutes  Int           @map("duration_minutes")           // copy
+  address          Json                                              // copy: { street, details, postalCode, city }
+  municipalityCode String        @map("municipality_code")
+  scheduledStart   DateTime      @map("scheduled_start")
+  scheduledEnd     DateTime      @map("scheduled_end")              // start + duration
+  priceCents       Int           @map("price_cents")                // copy, VAT included
+  vatRate          Decimal       @map("vat_rate") @db.Decimal(4, 2) // copy
+  currency         String        @default("EUR")
+  notes            String?                                           // from the customer to the professional
+  status           BookingStatus @default(pending_payment)
+  cancelReason     String?       @map("cancel_reason")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  events BookingEvent[]
+
+  @@index([customerId, scheduledStart])
+  @@index([professionalId, scheduledStart])
+  @@index([status])
+  @@map("bookings")
+}
+
+// One row per status change: the full history, for support and disputes
+model BookingEvent {
+  id         String         @id @default(uuid()) @db.Uuid
+  bookingId  String         @map("booking_id") @db.Uuid
+  fromStatus BookingStatus? @map("from_status")   // null for the first row (creation)
+  toStatus   BookingStatus  @map("to_status")
+  changedBy  String?        @map("changed_by")    // user id, or null when the system did it
+  at         DateTime       @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId, at])
+  @@map("booking_events")
+}

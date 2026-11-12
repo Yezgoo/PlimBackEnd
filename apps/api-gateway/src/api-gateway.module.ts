@@ -5,12 +5,13 @@ import { ApiGatewayController } from './api-gateway.controller.js';
 import { ApiGatewayService } from './api-gateway.service.js';
 import { AuthGuard } from './auth/auth.guard.js';
 import { PermissionsGuard } from './auth/permissions.guard.js';
+import { BookingsModule } from './bookings/bookings.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
 import { HealthModule } from './health/health.module.js';
 import { UsersModule } from './users/users.module.js';
 
 @Module({
-  imports: [HealthModule, UsersModule, CatalogModule, AdminModule],
+  imports: [HealthModule, UsersModule, CatalogModule, BookingsModule, AdminModule],
   controllers: [ApiGatewayController],
   providers: [
     ApiGatewayService,

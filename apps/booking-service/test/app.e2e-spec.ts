@@ -1,0 +1,80 @@
+import { Test } from '@nestjs/testing';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
+import request from 'supertest';
+import { App } from 'supertest/types';
+import { afterAll, beforeAll, describe, it, vi } from 'vitest';
+import { PrismaService } from '../src/database/prisma.service.js';
+
+// Boots the whole booking-service with a fake database and checks who gets in and what is accepted.
+describe('booking-service (e2e)', () => {
+  let app: INestApplication<App>;
+  const secret = 'e2e-secret';
+  const customerId = '11111111-1111-4111-8111-111111111111';
+
+  const validBooking = () => ({
+    customerId,
+    service: {
+      id: '22222222-2222-4222-8222-222222222222',
+      slug: 'limpeza-domestica-3h',
+      name: 'Limpeza doméstica (3 h)',
+      durationMinutes: 180,
+      priceCents: 4500,
+      vatRate: 0.23,
+    },
+    address: { street: 'Rua da Sofia 10', postalCode: '3000-389', city: 'Coimbra' },
+    municipalityCode: '0603',
+    // tomorrow at a round hour: always inside the allowed window
+    scheduledStart: new Date(Math.ceil((Date.now() + 24 * 3_600_000) / 3_600_000) * 3_600_000).toISOString(),
+  });
+
+  beforeAll(async () => {
+    process.env.INTERNAL_SERVICE_TOKEN = secret;
+    const { BookingServiceModule } = await import('../src/booking-service.module.js'); // after env is set
+
+    const moduleRef = await Test.createTestingModule({ imports: [BookingServiceModule] })
+      .overrideProvider(PrismaService)
+      .useValue({ booking: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) } })
+      .compile();
+
+    app = moduleRef.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  const post = (path: string, body: object) =>
+    request(app.getHttpServer()).post(path).set('X-Internal-Token', secret).send(body);
+
+  it('rejects callers without the internal token', () => {
+    return request(app.getHttpServer()).get(`/bookings?customerId=${customerId}`).expect(401);
+  });
+
+  it('lists a customer\'s bookings for the gateway', () => {
+    return request(app.getHttpServer()).get(`/bookings?customerId=${customerId}`).set('X-Internal-Token', secret).expect(200, []);
+  });
+
+  it('needs to know whose bookings to list', () => {
+    return request(app.getHttpServer()).get('/bookings').set('X-Internal-Token', secret).expect(400);
+  });
+
+  it('previews a valid booking', () => {
+    return post('/bookings/preview', validBooking()).expect(200);
+  });
+
+  it('refuses a booking with an incomplete postal code', () => {
+    const body = validBooking();
+    return post('/bookings/preview', { ...body, address: { ...body.address, postalCode: '3000' } }).expect(400);
+  });
+
+  it('refuses a status sent by the caller', () => {
+    return post('/bookings/preview', { ...validBooking(), status: 'confirmed' }).expect(400);
+  });
+
+  it('refuses a price of zero', () => {
+    const body = validBooking();
+    return post('/bookings/preview', { ...body, service: { ...body.service, priceCents: 0 } }).expect(400);
+  });
+});
