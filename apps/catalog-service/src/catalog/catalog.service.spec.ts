@@ -85,6 +85,19 @@ describe('CatalogService', () => {
     expect(await service.findService('nope')).toBeNull();
   });
 
+  it.each([
+    ['0.17', '0.19', 1700],
+    [null, '0.19', 1900],
+    [null, null, null],
+  ] as const)('resolves internal commission from service %s and category %s', async (override, category, expected) => {
+    prismaMock.serviceType.findFirst.mockResolvedValue({
+      slug: 'x', vatRate: new Prisma.Decimal('0.23'),
+      commissionRate: override && new Prisma.Decimal(override),
+      category: { commissionRate: category && new Prisma.Decimal(category) },
+    });
+    await expect(service.findBookingTerms('x')).resolves.toEqual({ slug: 'x', vatRate: 0.23, commissionBps: expected });
+  });
+
   describe('searchServices()', () => {
     const services = [
       {

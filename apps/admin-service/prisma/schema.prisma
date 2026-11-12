@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Setting {
+  key       String   @id
+  value     Int
+  min       Int
+  max       Int
+  revision  Int      @default(0)
+  updatedBy String?  @map("updated_by")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
+
+model AuditLog {
+  id          String   @id @db.Uuid
+  settingKey  String   @map("setting_key")
+  previous    Int
+  value       Int
+  revision    Int
+  adminSub    String   @map("admin_sub")
+  occurredAt  DateTime @default(now()) @map("occurred_at")
+
+  @@unique([settingKey, revision])
+  @@index([occurredAt, id])
+  @@map("audit_log")
+}
+
+model OutboxEvent {
+  id          String    @id @db.Uuid
+  sequence    BigInt    @unique @default(autoincrement())
+  key         String
+  payload     Json
+  createdAt   DateTime  @default(now()) @map("created_at")
+  publishedAt DateTime? @map("published_at")
+
+  @@index([publishedAt, sequence])
+  @@map("outbox_events")
+}

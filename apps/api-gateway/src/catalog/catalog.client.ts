@@ -31,6 +31,8 @@ export type Area = {
 export type Municipality = { code: string; name: string; district: string; pilot: boolean };
 
 export type SearchResult = { area: Area | null; services: ServiceSummary[] };
+type BookingTerms = Pick<ServiceDetail, 'id' | 'slug' | 'name' | 'pricingModel' | 'durationMinutes' | 'priceCents' | 'vatRate'>
+  & { commissionBps: number | null };
 
 // Talks to catalog-service over plain HTTP.
 @Injectable()
@@ -47,6 +49,10 @@ export class CatalogClient {
 
   findService(slug: string): Promise<ServiceDetail> {
     return this.request(`/services/${encodeURIComponent(slug)}`);
+  }
+
+  findBookingTerms(slug: string): Promise<BookingTerms> {
+    return this.request(`/services/${encodeURIComponent(slug)}/booking-terms`);
   }
 
   listMunicipalities(): Promise<Municipality[]> {

@@ -4,10 +4,11 @@ import { UsersModule } from '../users/users.module.js';
 import { BookingsClient } from './bookings.client.js';
 import { BookingsController } from './bookings.controller.js';
 import { MeOffersController } from './me-offers.controller.js';
+import { PricingSettingsClient } from './pricing-settings.client.js';
 
 @Module({
   imports: [UsersModule, CatalogModule],
   controllers: [BookingsController, MeOffersController],
-  providers: [BookingsClient],
+  providers: [BookingsClient, PricingSettingsClient],
 })
 export class BookingsModule {}

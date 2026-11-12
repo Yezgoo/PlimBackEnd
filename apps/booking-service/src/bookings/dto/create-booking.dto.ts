@@ -35,6 +35,7 @@ export class BookedServiceDto {
 
   @IsInt()
   @Min(1)
+  @Max(2_147_483_397) // PostgreSQL integer maximum less the maximum service fee
   priceCents!: number;
 
   @IsNumber()
@@ -63,6 +64,16 @@ export class BookingAddressDto {
   city!: string;
 }
 
+class ReviewedPriceDto {
+  @IsInt()
+  @Min(1)
+  priceCents!: number;
+
+  @IsInt()
+  @Min(0)
+  serviceFeeCents!: number;
+}
+
 export class CreateBookingDto {
   @IsUUID()
   customerId!: string; // users-service user id, resolved by the gateway from the token
@@ -80,6 +91,21 @@ export class CreateBookingDto {
 
   @IsDateString()
   scheduledStart!: string;
+
+  @IsInt()
+  @Min(150)
+  @Max(250)
+  serviceFeeCents!: number;
+
+  @IsInt()
+  @Min(1500)
+  @Max(2500)
+  commissionBps!: number;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ReviewedPriceDto)
+  reviewedPrice?: ReviewedPriceDto;
 
   @IsOptional()
   @IsString()

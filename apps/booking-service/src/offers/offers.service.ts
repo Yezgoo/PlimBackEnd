@@ -231,6 +231,7 @@ export class OffersService {
         scheduledStart: booking.scheduledStart,
         scheduledEnd: booking.scheduledEnd,
         priceCents: booking.priceCents,
+        proPayoutCents: booking.proPayoutCents,
         currency: booking.currency,
         city: address.city,
         postalArea: address.postalCode.slice(0, 4),

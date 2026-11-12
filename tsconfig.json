@@ -25,6 +25,9 @@
   "files": [],
   "references": [
     {
+      "path": "./apps/admin-service/tsconfig.app.json"
+    },
+    {
       "path": "./apps/api-gateway/tsconfig.app.json"
     },
     {

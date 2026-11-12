@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { BookingsService } from './bookings.service.js';
 import { CreateBookingDto } from './dto/create-booking.dto.js';
+import type { Booking } from '../generated/prisma/client.js';
 
 // Bookings as the customer sees them. customerId always comes from the gateway (resolved from the token).
 @Controller('bookings')
@@ -21,6 +22,26 @@ export class BookingsController {
   @Get()                                      // GET /bookings?customerId=<uuid>
   list(@Query('customerId', ParseUUIDPipe) customerId: string) {
     return this.bookings.listForCustomer(customerId);
+  }
+
+  @Get('professional')
+  listProfessional(@Query('professionalId', ParseUUIDPipe) professionalId: string) {
+    return this.bookings.listForProfessional(professionalId);
+  }
+
+  @Get('professional/:id')
+  findProfessional(@Param('id', ParseUUIDPipe) id: string, @Query('professionalId', ParseUUIDPipe) professionalId: string) {
+    return this.bookings.findForProfessional(id, professionalId);
+  }
+
+  @Post('professional/:id/status')
+  @HttpCode(200)
+  advanceProfessional(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('professionalId', ParseUUIDPipe) professionalId: string,
+    @Body('status') status: Booking['status'],
+  ) {
+    return this.bookings.advanceForProfessional(id, professionalId, status);
   }
 
   @Get(':id')                                 // GET /bookings/<id>?customerId=<uuid> → with its status history

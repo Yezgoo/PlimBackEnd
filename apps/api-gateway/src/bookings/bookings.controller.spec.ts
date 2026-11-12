@@ -5,11 +5,13 @@ import { CatalogClient } from '../catalog/catalog.client.js';
 import { UsersClient } from '../users/users.client.js';
 import { BookingsClient } from './bookings.client.js';
 import { BookingsController, type BookingInput } from './bookings.controller.js';
+import { PricingSettingsClient } from './pricing-settings.client.js';
 
 describe('BookingsController', () => {
   const bookingsMock = { preview: vi.fn(), create: vi.fn(), listForCustomer: vi.fn(), findForCustomer: vi.fn() };
   const usersMock = { findByAuth0Id: vi.fn() };
-  const catalogMock = { findService: vi.fn(), findArea: vi.fn() };
+  const catalogMock = { findBookingTerms: vi.fn(), findArea: vi.fn() };
+  const pricingMock = { read: vi.fn() };
   const me = { sub: 'auth0|me' } as JWTPayload;
   let controller: BookingsController;
 
@@ -24,7 +26,8 @@ describe('BookingsController', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     usersMock.findByAuth0Id.mockResolvedValue({ id: 'user-1' });
-    catalogMock.findService.mockResolvedValue({
+    pricingMock.read.mockResolvedValue({ serviceFeeCents: 200, commissionBps: 2000 });
+    catalogMock.findBookingTerms.mockResolvedValue({
       id: 'svc-1',
       slug: 'desentupimento-lavatorio-sanita',
       name: 'Desentupimento de lavatório ou sanita',
@@ -43,6 +46,7 @@ describe('BookingsController', () => {
       bookingsMock as unknown as BookingsClient,
       usersMock as unknown as UsersClient,
       catalogMock as unknown as CatalogClient,
+      pricingMock as unknown as PricingSettingsClient,
     );
   });
 
@@ -64,17 +68,20 @@ describe('BookingsController', () => {
       municipalityCode: '0603',
       scheduledStart: '2026-11-18T15:00:00Z',
       notes: 'Tocar à campainha',
+      serviceFeeCents: 200,
+      commissionBps: 2000,
     });
   });
 
   it('ignores a price, a customer or a status sent by the app', async () => {
-    const sneaky = { ...input(), priceCents: 1, customerId: 'someone-else', status: 'confirmed' } as BookingInput;
+    const sneaky = { ...input(), priceCents: 1, commissionBps: 1, serviceFeeCents: 1, customerId: 'someone-else', status: 'confirmed' } as BookingInput;
 
     await controller.create(me, sneaky);
 
     const sent = bookingsMock.create.mock.calls[0][0];
     expect(sent.service.priceCents).toBe(6500);
     expect(sent.customerId).toBe('user-1');
+    expect(sent).toMatchObject({ serviceFeeCents: 200, commissionBps: 2000 });
     expect(sent).not.toHaveProperty('status');
     expect(sent).not.toHaveProperty('priceCents');
   });
@@ -84,6 +91,14 @@ describe('BookingsController', () => {
 
     expect(bookingsMock.preview).toHaveBeenCalledTimes(1);
     expect(bookingsMock.create).not.toHaveBeenCalled();
+  });
+
+  it('uses the catalog override and passes through the customer’s reviewed amounts', async () => {
+    const service = await catalogMock.findBookingTerms();
+    catalogMock.findBookingTerms.mockResolvedValue({ ...service, commissionBps: 1750 });
+    const reviewedPrice = { priceCents: 6500, serviceFeeCents: 200 };
+    await controller.create(me, input({ reviewedPrice }));
+    expect(bookingsMock.create).toHaveBeenCalledWith(expect.objectContaining({ commissionBps: 1750, reviewedPrice }));
   });
 
   it('refuses a postal code outside the area we work in', async () => {
@@ -104,7 +119,7 @@ describe('BookingsController', () => {
   });
 
   it('refuses a service that is not fixed-price', async () => {
-    catalogMock.findService.mockResolvedValue({ id: 'svc-2', pricingModel: 'quote' });
+    catalogMock.findBookingTerms.mockResolvedValue({ id: 'svc-2', pricingModel: 'quote' });
 
     await expect(controller.create(me, input())).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
@@ -114,7 +129,7 @@ describe('BookingsController', () => {
     await expect(controller.create(me, input())).rejects.toBeInstanceOf(NotFoundException);
 
     usersMock.findByAuth0Id.mockResolvedValue({ id: 'user-1' });
-    catalogMock.findService.mockRejectedValue(new NotFoundException('Service nope not found'));
+    catalogMock.findBookingTerms.mockRejectedValue(new NotFoundException('Service nope not found'));
     await expect(controller.create(me, input({ serviceSlug: 'nope' }))).rejects.toThrow('Service nope not found');
   });
 

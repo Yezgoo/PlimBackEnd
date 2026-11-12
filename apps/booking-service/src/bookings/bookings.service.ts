@@ -10,6 +10,13 @@ export const MAX_DAYS_AHEAD = 90;
 export const START_STEP_MINUTES = 15; // 10:00, 10:15, 10:30 ... keeps timetables tidy
 
 const MINUTE = 60_000;
+const history = { orderBy: { at: 'asc' }, select: { fromStatus: true, toStatus: true, at: true } } as const;
+
+const previousStatus = new Map<string, Booking['status']>([
+  ['en_route', 'accepted'],
+  ['in_progress', 'en_route'],
+  ['done', 'in_progress'],
+]);
 
 @Injectable()
 export class BookingsService {
@@ -30,15 +37,23 @@ export class BookingsService {
       scheduledStart,
       scheduledEnd,
       priceCents: dto.service.priceCents,
+      serviceFeeCents: dto.serviceFeeCents,
       vatRate: dto.service.vatRate,
-      totalCents: dto.service.priceCents, // service fee and coupons are added in a later step
+      totalCents: dto.service.priceCents + dto.serviceFeeCents,
       currency: 'EUR',
       notes: dto.notes ?? null,
     };
   }
 
   async create(dto: CreateBookingDto) {
-    const { scheduledStart, scheduledEnd } = this.schedule(dto);
+    const preview = this.preview(dto);
+    const { scheduledStart, scheduledEnd, priceCents, serviceFeeCents, totalCents } = preview;
+    const { reviewedPrice, commissionBps } = dto;
+    if (reviewedPrice && (reviewedPrice.priceCents !== priceCents || reviewedPrice.serviceFeeCents !== serviceFeeCents)) {
+      throw new ConflictException({ code: 'BOOKING_PRICE_CHANGED', message: 'Review the updated booking price', preview });
+    }
+    // Round half a cent up using integer arithmetic. The customer fee is outside this split.
+    const commissionCents = Math.floor((priceCents * commissionBps + 5_000) / 10_000);
 
     // a double tap on "Marcar" must not create two bookings
     const duplicate = await this.prisma.booking.findFirst({
@@ -63,7 +78,12 @@ export class BookingsService {
         municipalityCode: dto.municipalityCode,
         scheduledStart,
         scheduledEnd,
-        priceCents: dto.service.priceCents,
+        priceCents,
+        serviceFeeCents,
+        totalCents,
+        commissionBps,
+        commissionCents,
+        proPayoutCents: priceCents - commissionCents,
         vatRate: dto.service.vatRate,
         notes: dto.notes,
         // the first line of the booking's history
@@ -98,10 +118,47 @@ export class BookingsService {
   async findForCustomer(id: string, customerId: string) {
     const booking = await this.prisma.booking.findFirst({
       where: { id, customerId },
-      include: { events: { orderBy: { at: 'asc' }, select: { fromStatus: true, toStatus: true, at: true } } },
+      include: { events: history },
     });
     if (!booking) throw new NotFoundException(`Booking ${id} not found`);
     return this.present(booking);
+  }
+
+  async listForProfessional(professionalId: string) {
+    const bookings = await this.prisma.booking.findMany({
+      where: { professionalId },
+      orderBy: { scheduledStart: 'desc' },
+    });
+    return bookings.map((booking) => this.present(booking, true));
+  }
+
+  async findForProfessional(id: string, professionalId: string) {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id, professionalId },
+      include: { events: history },
+    });
+    if (!booking) throw new NotFoundException(`Booking ${id} not found`);
+    return this.present(booking, true);
+  }
+
+  async advanceForProfessional(id: string, professionalId: string, status: Booking['status']) {
+    const fromStatus = previousStatus.get(status);
+    if (!fromStatus) throw new BadRequestException('Unsupported booking status');
+
+    const booking = await this.prisma.$transaction(async (tx) => {
+      const moved = await tx.booking.updateMany({
+        where: { id, professionalId, status: fromStatus },
+        data: { status },
+      });
+      if (moved.count) {
+        await tx.bookingEvent.create({ data: { bookingId: id, fromStatus, toStatus: status, changedBy: professionalId } });
+      }
+      const current = await tx.booking.findFirst({ where: { id, professionalId }, include: { events: history } });
+      if (!current) throw new NotFoundException(`Booking ${id} not found`);
+      if (current.status !== status) throw new ConflictException('Booking cannot move to that status');
+      return current;
+    });
+    return this.present(booking, true);
   }
 
   private schedule(dto: CreateBookingDto) {
@@ -123,7 +180,12 @@ export class BookingsService {
   }
 
   // Plain values for JSON: the VAT rate as a number (Prisma returns a Decimal object)
-  private present<T extends Booking>(booking: T) {
-    return { ...booking, vatRate: Number(booking.vatRate), totalCents: booking.priceCents };
+  private present<T extends Booking>(booking: T, professional = false) {
+    const { commissionBps: _commissionBps, commissionCents: _commissionCents, proPayoutCents, ...details } = booking;
+    return {
+      ...details,
+      vatRate: Number(booking.vatRate),
+      ...(professional ? { proPayoutCents } : {}),
+    };
   }
 }

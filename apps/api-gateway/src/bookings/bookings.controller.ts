@@ -4,7 +4,8 @@ import { CurrentUser } from '../auth/current-user.decorator.js';
 import { HumanCallerGuard } from '../auth/human-caller.guard.js';
 import { CatalogClient } from '../catalog/catalog.client.js';
 import { UsersClient } from '../users/users.client.js';
-import { BookingsClient, type BookingRequest } from './bookings.client.js';
+import { BookingsClient, type BookingRequest, type ReviewedPrice } from './bookings.client.js';
+import { PricingSettingsClient } from './pricing-settings.client.js';
 
 // What the app sends: which service, where and when. Never the price or the customer.
 export type BookingInput = {
@@ -12,6 +13,7 @@ export type BookingInput = {
   address?: { street?: string; details?: string; postalCode?: string; city?: string };
   scheduledStart?: string;
   notes?: string;
+  reviewedPrice?: ReviewedPrice;
 };
 
 // The customer's bookings. The app's four steps (service, address, date and time, summary) end in
@@ -23,6 +25,7 @@ export class BookingsController {
     private readonly bookings: BookingsClient,
     private readonly users: UsersClient,
     private readonly catalog: CatalogClient,
+    private readonly pricing: PricingSettingsClient,
   ) {}
 
   @Post('preview')                            // POST /bookings/preview → what the booking would be; saves nothing
@@ -33,7 +36,8 @@ export class BookingsController {
 
   @Post()                                     // POST /bookings → 201, status "pending_payment"
   async create(@CurrentUser() user: JWTPayload, @Body() input: BookingInput) {
-    return this.bookings.create(await this.buildRequest(user, input));
+    const request = await this.buildRequest(user, input);
+    return this.bookings.create({ ...request, reviewedPrice: input.reviewedPrice });
   }
 
   @Get()                                      // GET /bookings → my bookings, latest first
@@ -59,10 +63,11 @@ export class BookingsController {
     if (typeof address?.postalCode !== 'string') throw new BadRequestException('address.postalCode is required');
     if (typeof scheduledStart !== 'string') throw new BadRequestException('scheduledStart is required');
 
-    const [customerId, service, area] = await Promise.all([
+    const [customerId, service, area, pricing] = await Promise.all([
       this.customerId(user),
-      this.catalog.findService(serviceSlug),          // 404 if the service doesn't exist (or was switched off)
+      this.catalog.findBookingTerms(serviceSlug),      // 404 if the service doesn't exist (or was switched off)
       this.catalog.findArea(address.postalCode),      // 400 if it isn't a postal code
+      this.pricing.read(),
     ]);
 
     if (service.pricingModel !== 'fixed') {
@@ -95,6 +100,8 @@ export class BookingsController {
       municipalityCode: area.municipality.code,
       scheduledStart,
       notes: input.notes,
+      serviceFeeCents: pricing.serviceFeeCents,
+      commissionBps: service.commissionBps ?? pricing.commissionBps,
     };
   }
 }

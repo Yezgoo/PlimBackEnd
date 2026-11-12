@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { callInternalService } from '../internal/internal-http.js';
 
 export type BookingAddress = { street: string; details?: string; postalCode: string; city: string };
+export type ReviewedPrice = { priceCents: number; serviceFeeCents: number };
 
 // What booking-service needs to create a booking. Every value here was looked up by the gateway
 // (customer from the token, service and price from the catalog), never taken as-is from the app.
@@ -12,6 +13,9 @@ export type BookingRequest = {
   municipalityCode: string;
   scheduledStart: string;
   notes?: string;
+  serviceFeeCents: number;
+  commissionBps: number;
+  reviewedPrice?: ReviewedPrice;
 };
 
 export type BookingSummary = {
@@ -21,6 +25,7 @@ export type BookingSummary = {
   scheduledStart: string;
   scheduledEnd: string;
   priceCents: number;
+  serviceFeeCents: number;
   vatRate: number;
   totalCents: number;
   currency: string;
@@ -43,8 +48,10 @@ export type Booking = {
   scheduledStart: string;
   scheduledEnd: string;
   priceCents: number;
+  serviceFeeCents: number;
   vatRate: number;
   totalCents: number;
+  proPayoutCents?: number | null;
   currency: string;
   notes: string | null;
   status: BookingStatus;
@@ -67,6 +74,7 @@ export type JobOffer = {
     scheduledStart: string;
     scheduledEnd: string;
     priceCents: number;
+    proPayoutCents: number | null;
     currency: string;
     city: string;
     postalArea: string;
@@ -94,6 +102,21 @@ export class BookingsClient {
 
   findForCustomer(id: string, customerId: string): Promise<Booking> {
     return this.request(`/bookings/${encodeURIComponent(id)}?customerId=${encodeURIComponent(customerId)}`);
+  }
+
+  listForProfessional(professionalId: string): Promise<Booking[]> {
+    return this.request(`/bookings/professional?professionalId=${encodeURIComponent(professionalId)}`);
+  }
+
+  findForProfessional(id: string, professionalId: string): Promise<Booking> {
+    return this.request(`/bookings/professional/${encodeURIComponent(id)}?professionalId=${encodeURIComponent(professionalId)}`);
+  }
+
+  advanceForProfessional(id: string, professionalId: string, status: unknown): Promise<Booking> {
+    return this.request(`/bookings/professional/${encodeURIComponent(id)}/status?professionalId=${encodeURIComponent(professionalId)}`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    });
   }
 
   // --- job offers, as the professional sees them ---

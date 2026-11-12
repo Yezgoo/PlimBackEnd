@@ -74,4 +74,19 @@ export class CatalogService {
     // Prisma returns Decimal objects; the app wants a plain number (0.23)
     return service && { ...service, vatRate: Number(service.vatRate) };
   }
+
+  async findBookingTerms(slug: string) {
+    const service = await this.prisma.serviceType.findFirst({
+      where: { slug, active: true, category: { active: true } },
+      select: {
+        id: true, slug: true, name: true, pricingModel: true, durationMinutes: true,
+        priceCents: true, vatRate: true, commissionRate: true,
+        category: { select: { commissionRate: true } },
+      },
+    });
+    if (!service) return null;
+    const { commissionRate, category, vatRate, ...terms } = service;
+    const override = commissionRate ?? category.commissionRate;
+    return { ...terms, vatRate: Number(vatRate), commissionBps: override?.mul(10_000).toNumber() ?? null };
+  }
 }

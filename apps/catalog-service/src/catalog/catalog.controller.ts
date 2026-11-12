@@ -27,6 +27,13 @@ export class CatalogController {
     return service;
   }
 
+  @Get('services/:slug/booking-terms')
+  async findBookingTerms(@Param('slug') slug: string) {
+    const terms = await this.catalog.findBookingTerms(slug);
+    if (!terms) throw new NotFoundException(`Service ${slug} not found`);
+    return terms;
+  }
+
   @Get('municipalities')                      // GET /municipalities → where YezGoo works (or will)
   listMunicipalities() {
     return this.areas.listMunicipalities();

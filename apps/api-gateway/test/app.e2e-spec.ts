@@ -43,6 +43,10 @@ describe('api-gateway (e2e)', () => {
     return request(app.getHttpServer()).get('/admin/me').expect(401);
   });
 
+  it('PATCH /admin/settings is protected', () => {
+    return request(app.getHttpServer()).patch('/admin/settings/commission_default').send({ value: 2100 }).expect(401);
+  });
+
   it('a route nobody marked @Public() is protected by default', () => {
     return request(app.getHttpServer()).get('/').expect(401);
   });

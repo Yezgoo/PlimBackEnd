@@ -35,6 +35,11 @@ model Booking {
   scheduledStart   DateTime      @map("scheduled_start")
   scheduledEnd     DateTime      @map("scheduled_end")              // start + duration
   priceCents       Int           @map("price_cents")                // copy, VAT included
+  serviceFeeCents  Int           @default(0) @map("service_fee_cents")
+  totalCents       Int           @map("total_cents")
+  commissionBps    Int?          @map("commission_bps")
+  commissionCents  Int?          @map("commission_cents")
+  proPayoutCents   Int?          @map("pro_payout_cents")
   vatRate          Decimal       @map("vat_rate") @db.Decimal(4, 2) // copy
   currency         String        @default("EUR")
   notes            String?                                           // from the customer to the professional

@@ -2,7 +2,7 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { afterAll, beforeAll, describe, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PrismaService } from '../src/database/prisma.service.js';
 
 // Boots the whole booking-service with a fake database and checks who gets in and what is accepted.
@@ -10,6 +10,8 @@ describe('booking-service (e2e)', () => {
   let app: INestApplication<App>;
   const secret = 'e2e-secret';
   const customerId = '11111111-1111-4111-8111-111111111111';
+  const professionalId = '33333333-3333-4333-8333-333333333333';
+  const bookingId = '44444444-4444-4444-8444-444444444444';
 
   const validBooking = () => ({
     customerId,
@@ -23,6 +25,8 @@ describe('booking-service (e2e)', () => {
     },
     address: { street: 'Rua da Sofia 10', postalCode: '3000-389', city: 'Coimbra' },
     municipalityCode: '0603',
+    serviceFeeCents: 200,
+    commissionBps: 2000,
     // tomorrow at a round hour: always inside the allowed window
     scheduledStart: new Date(Math.ceil((Date.now() + 24 * 3_600_000) / 3_600_000) * 3_600_000).toISOString(),
   });
@@ -60,8 +64,34 @@ describe('booking-service (e2e)', () => {
     return request(app.getHttpServer()).get('/bookings').set('X-Internal-Token', secret).expect(400);
   });
 
+  it('routes the professional list separately from customer booking details', () => {
+    return request(app.getHttpServer())
+      .get(`/bookings/professional?professionalId=${professionalId}`)
+      .set('X-Internal-Token', secret)
+      .expect(200, []);
+  });
+
+  it('rejects unsupported professional status targets over HTTP', () => {
+    return post(`/bookings/professional/${bookingId}/status?professionalId=${professionalId}`, { status: 'confirmed' })
+      .expect(400, { statusCode: 400, message: 'Unsupported booking status', error: 'Bad Request' });
+  });
+
   it('previews a valid booking', () => {
-    return post('/bookings/preview', validBooking()).expect(200);
+    return post('/bookings/preview', validBooking()).expect(200).expect(({ body }) => {
+      expect(body).toMatchObject({ priceCents: 4500, serviceFeeCents: 200, totalCents: 4700 });
+      expect(body).not.toHaveProperty('commissionBps');
+    });
+  });
+
+  it('returns the updated price breakdown when the reviewed price no longer matches', () => {
+    return post('/bookings', { ...validBooking(), reviewedPrice: { priceCents: 4500, serviceFeeCents: 150 } })
+      .expect(409)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          code: 'BOOKING_PRICE_CHANGED',
+          preview: { priceCents: 4500, serviceFeeCents: 200, totalCents: 4700 },
+        });
+      });
   });
 
   it('refuses a booking with an incomplete postal code', () => {

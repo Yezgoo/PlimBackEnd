@@ -22,12 +22,18 @@ const dto = (overrides: Partial<CreateBookingDto> = {}): CreateBookingDto => ({
   address: { street: 'Rua da Sofia 10', details: '2.º Esq.', postalCode: '3000-389', city: 'Coimbra' },
   municipalityCode: '0603',
   scheduledStart: '2026-11-18T15:00:00Z',
+  serviceFeeCents: 200,
+  commissionBps: 2000,
   notes: 'Tocar à campainha',
   ...overrides,
 });
 
 describe('BookingsService', () => {
-  const prismaMock = { booking: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn(), findUniqueOrThrow: vi.fn() } };
+  const prismaMock = {
+    booking: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn(), findUniqueOrThrow: vi.fn(), updateMany: vi.fn() },
+    bookingEvent: { create: vi.fn() },
+    $transaction: vi.fn(),
+  };
   const offersMock = { start: vi.fn() };
   let service: BookingsService;
 
@@ -54,6 +60,11 @@ describe('BookingsService', () => {
         customerId: '11111111-1111-4111-8111-111111111111',
         serviceName: 'Desentupimento de lavatório ou sanita',
         priceCents: 6500,
+        serviceFeeCents: 200,
+        totalCents: 6700,
+        commissionBps: 2000,
+        commissionCents: 1300,
+        proPayoutCents: 5200,
         durationMinutes: 60,
         municipalityCode: '0603',
         address: { street: 'Rua da Sofia 10', details: '2.º Esq.', postalCode: '3000-389', city: 'Coimbra' },
@@ -61,7 +72,9 @@ describe('BookingsService', () => {
       expect(data.scheduledStart).toEqual(new Date('2026-11-18T15:00:00Z'));
       expect(data.scheduledEnd).toEqual(new Date('2026-11-18T16:00:00Z'));
       expect(result.vatRate).toBe(0.23);
-      expect(result.totalCents).toBe(6500);
+      expect(result.totalCents).toBe(6700);
+      expect(result).not.toHaveProperty('commissionCents');
+      expect(result).not.toHaveProperty('proPayoutCents');
     });
 
     it('starts as pending_payment and writes the first line of its history', async () => {
@@ -105,6 +118,21 @@ describe('BookingsService', () => {
       // a cancelled booking does not block booking that slot again
       expect(prismaMock.booking.findFirst.mock.calls[0][0].where.status).toEqual({ not: 'cancelled' });
     });
+
+    it('rounds fractional commission cents and leaves the fee outside the split', async () => {
+      await service.create(dto({ service: { ...dto().service, priceCents: 6502 }, commissionBps: 2500 }));
+      expect(prismaMock.booking.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+        commissionCents: 1626, proPayoutCents: 4876, totalCents: 6702,
+      }) });
+    });
+
+    it('returns a fresh preview without creating a booking if the reviewed fee changed', async () => {
+      await expect(service.create(dto({ reviewedPrice: { priceCents: 6500, serviceFeeCents: 150 } }))).rejects.toMatchObject({
+        response: { code: 'BOOKING_PRICE_CHANGED', preview: { priceCents: 6500, serviceFeeCents: 200, totalCents: 6700 } },
+      });
+      expect(prismaMock.booking.create).not.toHaveBeenCalled();
+      expect(offersMock.start).not.toHaveBeenCalled();
+    });
   });
 
   describe('when a booking may start', () => {
@@ -137,7 +165,8 @@ describe('BookingsService', () => {
     expect(summary).toMatchObject({
       service: { name: 'Desentupimento de lavatório ou sanita', durationMinutes: 60 },
       priceCents: 6500,
-      totalCents: 6500,
+      serviceFeeCents: 200,
+      totalCents: 6700,
       currency: 'EUR',
       scheduledEnd: new Date('2026-11-18T16:00:00Z'),
     });
@@ -160,5 +189,45 @@ describe('BookingsService', () => {
 
     await expect(service.findForCustomer('booking-1', 'someone-else')).rejects.toBeInstanceOf(NotFoundException);
     expect(prismaMock.booking.findFirst.mock.calls[0][0].where).toEqual({ id: 'booking-1', customerId: 'someone-else' });
+  });
+
+  describe('professional status updates', () => {
+    beforeEach(() => {
+      prismaMock.$transaction.mockImplementation(async (work) => work(prismaMock));
+      prismaMock.booking.updateMany.mockResolvedValue({ count: 0 });
+    });
+
+    it.each([
+      ['accepted', 'en_route'],
+      ['en_route', 'in_progress'],
+      ['in_progress', 'done'],
+    ] as const)('records %s → %s for the assigned professional', async (fromStatus, status) => {
+      prismaMock.booking.updateMany.mockResolvedValue({ count: 1 });
+      const event = { fromStatus, toStatus: status, at: NOW };
+      prismaMock.booking.findFirst.mockResolvedValue({ status, events: [event], vatRate: 0.23 });
+
+      await expect(service.advanceForProfessional('booking-1', 'pro-1', status)).resolves.toMatchObject({ status, events: [event] });
+      expect(prismaMock.booking.updateMany).toHaveBeenCalledWith({
+        where: { id: 'booking-1', professionalId: 'pro-1', status: fromStatus },
+        data: { status },
+      });
+      expect(prismaMock.bookingEvent.create).toHaveBeenCalledWith({
+        data: { bookingId: 'booking-1', fromStatus, toStatus: status, changedBy: 'pro-1' },
+      });
+    });
+
+    it('returns the existing status for a retry without writing another event', async () => {
+      prismaMock.booking.findFirst.mockResolvedValue({ status: 'en_route', vatRate: 0.23 });
+      await expect(service.advanceForProfessional('booking-1', 'pro-1', 'en_route')).resolves.toMatchObject({ status: 'en_route' });
+      expect(prismaMock.bookingEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects skipped states, unsupported targets, and bookings owned by someone else', async () => {
+      prismaMock.booking.findFirst.mockResolvedValueOnce({ status: 'accepted' });
+      await expect(service.advanceForProfessional('booking-1', 'pro-1', 'done')).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.advanceForProfessional('booking-1', 'pro-2', 'en_route')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.advanceForProfessional('booking-1', 'pro-1', 'confirmed')).rejects.toBeInstanceOf(BadRequestException);
+      expect(prismaMock.bookingEvent.create).not.toHaveBeenCalled();
+    });
   });
 });
