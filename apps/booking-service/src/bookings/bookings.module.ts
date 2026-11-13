@@ -7,10 +7,11 @@ import { ProfessionalsDirectory } from '../offers/professionals.directory.js';
 import { SettingsReader } from '../settings/settings.reader.js';
 import { BookingsController } from './bookings.controller.js';
 import { BookingsService } from './bookings.service.js';
+import { CancellationService } from './cancellation.service.js';
 
 @Module({
   imports: [DatabaseModule],
   controllers: [BookingsController, OffersController],
-  providers: [BookingsService, OffersService, OffersSweeper, ProfessionalsDirectory, SettingsReader],
+  providers: [BookingsService, CancellationService, OffersService, OffersSweeper, ProfessionalsDirectory, SettingsReader],
 })
 export class BookingsModule {}

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { callInternalService } from '../internal/internal-http.js';
 
 export type BookingAddress = { street: string; details?: string; postalCode: string; city: string };
-export type ReviewedPrice = { priceCents: number; serviceFeeCents: number };
+export type ReviewedPrice = { priceCents: number; serviceFeeCents: number; discountCents?: number; freeCancelUntil?: string; lateCancelFeeCents?: number };
 
 // What booking-service needs to create a booking. Every value here was looked up by the gateway
 // (customer from the token, service and price from the catalog), never taken as-is from the app.
@@ -13,12 +13,14 @@ export type BookingRequest = {
   municipalityCode: string;
   scheduledStart: string;
   notes?: string;
+  couponCode?: string;
   serviceFeeCents: number;
   commissionBps: number;
   reviewedPrice?: ReviewedPrice;
 };
 
 export type BookingSummary = {
+  cancellation: { freeCancelUntil: string; lateCancelFeeCents: number };
   service: { id: string; slug: string; name: string; durationMinutes: number };
   address: BookingAddress;
   municipalityCode: string;
@@ -121,6 +123,19 @@ export class BookingsClient {
 
   confirmForCustomer(id: string, customerId: string): Promise<Booking> {
     const path = `/bookings/${encodeURIComponent(id)}/confirm?customerId=${encodeURIComponent(customerId)}`;
+    return this.request(path, { method: 'POST' });
+  }
+
+  cancelForCustomer(id: string, customerId: string): Promise<Booking> {
+    return this.request(`/bookings/${encodeURIComponent(id)}/cancel?customerId=${encodeURIComponent(customerId)}`, { method: 'POST' });
+  }
+
+  reportNoShow(id: string, customerId: string): Promise<Booking> {
+    return this.request(`/bookings/${encodeURIComponent(id)}/no-show?customerId=${encodeURIComponent(customerId)}`, { method: 'POST' });
+  }
+
+  cancelForProfessional(id: string, professionalId: string): Promise<{ id: string; released: boolean }> {
+    const path = `/bookings/professional/${encodeURIComponent(id)}/cancel?professionalId=${encodeURIComponent(professionalId)}`;
     return this.request(path, { method: 'POST' });
   }
 

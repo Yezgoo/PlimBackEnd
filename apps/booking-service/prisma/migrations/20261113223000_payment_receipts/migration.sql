@@ -1,0 +1,7 @@
+CREATE TABLE "booking_receipts" (
+  "booking_id" UUID PRIMARY KEY REFERENCES "bookings"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "intent_id" TEXT NOT NULL UNIQUE,
+  "event_id" TEXT NOT NULL UNIQUE,
+  "amount_cents" INTEGER NOT NULL,
+  "received_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

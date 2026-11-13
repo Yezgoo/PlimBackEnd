@@ -125,6 +125,9 @@ come from the booking service environment.
 | GET | `/bookings` | logged-in person | Caller's bookings, latest first |
 | GET | `/bookings/:id` | logged-in person | One of the caller's bookings, with its status history |
 | POST | `/bookings/:id/confirm` | logged-in person | The customer confirms a finished (`done`) job. Without an answer it is confirmed automatically after `release_after_hours` (48 by default) |
+| POST | `/bookings/:id/cancel` | customer | Cancels before the professional is on the way, applying the cancellation terms saved on the booking |
+| POST | `/bookings/:id/no-show` | customer | Reports an unstarted job after the no-show grace period |
+| POST | `/me/professional/bookings/:id/cancel` | assigned professional | Returns an unstarted job to dispatch |
 | GET | `/me/professional/offers` | logged-in person | Jobs offered to the caller as a professional; `?status=pending` for the ones waiting for an answer |
 | POST | `/me/professional/offers/:id/accept` | logged-in person | Take the job. The answer includes the full address and the customer's notes |
 | POST | `/me/professional/offers/:id/decline` | logged-in person | Pass: the next professional is asked |
@@ -166,6 +169,14 @@ Creation stores these amounts on the booking. Existing bookings keep their origi
 have no recorded commission split. Apply the booking migration and regenerate the Prisma client
 before restarting booking-service. No money is collected in this step.
 
+### Cancellation (11e)
+
+Checkout shows the booking-specific free cancellation deadline and late fee. Apps can echo
+`freeCancelUntil` and `lateCancelFeeCents` in `reviewedPrice`; a mismatch returns
+`409 BOOKING_TERMS_CHANGED` with a fresh preview. Cancellation stays free before assignment.
+The backend records fees and refund amounts for step 12e. Apply the admin settings and booking
+cancellation migrations before running this version against a live database.
+
 ### Scheduling
 
 A booking can be made for a fixed-price service, in a postal code where bookings are open, starting
@@ -185,6 +196,73 @@ four digits of the postal code; the street and the notes come with acceptance.
 
 Until payments exist (roadmap step 12) this starts as soon as the booking is created. With
 `PAYMENTS_REQUIRED=true` a booking waits in `pending_payment` instead.
+
+## Stripe sandbox checkout (12c)
+
+Apply the booking migrations and regenerate the booking Prisma client. Set
+`PAYMENTS_REQUIRED=true` for booking-service, and configure the test secret key and webhook
+signing secret for payments-service. Start it with `npm run start:payments`.
+
+For local testing, run `stripe listen --events payment_intent.succeeded --forward-to localhost:3005/stripe/webhook`
+and use the signing secret it prints. Enable card, MB WAY, and Multibanco in the Stripe sandbox's
+payment method settings. Checkout uses the account's default configuration unless
+`STRIPE_PAYMENT_METHOD_CONFIGURATION` specifies a sandbox configuration.
+Set `PAYMENTS_RETURN_URL` to the web app's bookings page. On mobile, return to the app and refresh
+the booking after leaving Checkout. The web app may require signing in again after the redirect.
+
+Open **Abrir pagamento** on a pending booking. The service takes the total from the saved
+booking. A signed Stripe success event records the payment and starts dispatch. Multibanco
+bookings stay pending until payment succeeds. Payments received after cancellation are recorded
+without restarting dispatch. Automatic refunds and payouts are part of step 12e.
+
+## Stripe Connect sandbox onboarding (12d)
+
+Enable Connect in the Stripe sandbox, create `payments_db`, set `PAYMENTS_DATABASE_URL`,
+and run `npm run db:payments:deploy`. Start payments-service and set `CONNECT_RETURN_URL`
+to the Expo web bookings page. Use HTTPS outside local sandbox development.
+
+An approved professional can open **Receber pagamentos** in the app. The API stores one
+Portuguese Express account per professional and requests the transfers capability. Stripe
+collects identity and bank information. When the user returns, the app reads the current status
+from Stripe. An expired Account Link returns the professional to the same screen to request
+a fresh link. On mobile, return to the app and tap **Atualizar estado** after the browser flow.
+
+If account creation remains ambiguous after Stripe's idempotency window, reconcile the reserved
+record with the Stripe sandbox account using the `plimProfessionalId` metadata before retrying.
+Fund transfers and refunds remain part of 12e.
+
+## Stripe sandbox settlement (12e)
+
+Apply the booking migration and regenerate the booking Prisma client. Run
+`npm run db:payments:deploy` again to add the settlement table. With
+`PAYMENTS_REQUIRED=true` and `PAYMENTS_DATABASE_URL` set for payments-service,
+it checks for paid bookings that need settlement every 30 seconds.
+
+- Customer or automatic confirmation releases the stored professional share to the
+  ready Connect account. This is a Stripe transfer to the connected balance.
+- Cancellation or no-show refunds the stored amount after any applicable fee.
+  If dispatch found nobody, it refunds the full payment. An unpaid booking has no
+  receipt to refund. A delayed payment received after cancellation is eligible.
+- A pending refund is checked again until it succeeds. Failed or cancelled provider
+  refunds and ambiguous submissions older than 23 hours require reconciliation
+  in the Stripe sandbox using the booking ID in the operation metadata.
+
+## First-booking coupons (12f)
+
+Apply the new bookings migration. Configure a coupon in the bookings database with an uppercase
+code and either a fixed amount in cents or a percentage of the service price. For example:
+
+```sql
+INSERT INTO coupons (code, fixed_cents) VALUES ('WELCOME5', 500);
+INSERT INTO coupons (code, percent) VALUES ('WELCOME10', 10);
+```
+
+Customers enter the code before reviewing checkout. Booking-service validates it and stores
+the discount on the first booking. Any previous booking, including a cancelled one, ends
+eligibility. The discount is capped at Plim's commission plus the service fee, with a minimum
+checkout total of €0.50 for discounted bookings. The professional's share stays the same.
+The coupon uses the saved discounted total for Stripe payment and refunds. The admin coupon
+editor is part of step 15b.
 
 ## Document uploads
 

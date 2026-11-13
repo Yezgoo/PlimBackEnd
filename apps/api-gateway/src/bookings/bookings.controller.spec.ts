@@ -8,7 +8,7 @@ import { BookingsController, type BookingInput } from './bookings.controller.js'
 import { PricingSettingsClient } from './pricing-settings.client.js';
 
 describe('BookingsController', () => {
-  const bookingsMock = { preview: vi.fn(), create: vi.fn(), listForCustomer: vi.fn(), findForCustomer: vi.fn(), confirmForCustomer: vi.fn() };
+  const bookingsMock = { preview: vi.fn(), create: vi.fn(), listForCustomer: vi.fn(), findForCustomer: vi.fn(), confirmForCustomer: vi.fn(), cancelForCustomer: vi.fn(), reportNoShow: vi.fn() };
   const usersMock = { findByAuth0Id: vi.fn() };
   const catalogMock = { findBookingTerms: vi.fn(), findArea: vi.fn() };
   const pricingMock = { read: vi.fn() };
@@ -152,5 +152,13 @@ describe('BookingsController', () => {
     await controller.confirm(me, 'booking-9');
 
     expect(bookingsMock.confirmForCustomer).toHaveBeenCalledWith('booking-9', 'user-1');
+  });
+
+  it('cancels and reports a no-show as the logged-in customer', async () => {
+    await controller.cancel(me, 'booking-9');
+    await controller.reportNoShow(me, 'booking-9');
+
+    expect(bookingsMock.cancelForCustomer).toHaveBeenCalledWith('booking-9', 'user-1');
+    expect(bookingsMock.reportNoShow).toHaveBeenCalledWith('booking-9', 'user-1');
   });
 });

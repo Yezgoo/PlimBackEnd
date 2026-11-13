@@ -13,6 +13,7 @@ export type BookingInput = {
   address?: { street?: string; details?: string; postalCode?: string; city?: string };
   scheduledStart?: string;
   notes?: string;
+  couponCode?: string;
   reviewedPrice?: ReviewedPrice;
 };
 
@@ -50,7 +51,19 @@ export class BookingsController {
     return this.bookings.findForCustomer(id, await this.customerId(user));
   }
 
-  @Post(':id/confirm')                        // POST /bookings/<id>/confirm → "the work was done"; releases the pro's payment
+  @Post(':id/cancel')                         // POST /bookings/<id>/cancel → free or with the late fee agreed when booking
+  @HttpCode(200)
+  async cancel(@CurrentUser() user: JWTPayload, @Param('id') id: string) {
+    return this.bookings.cancelForCustomer(id, await this.customerId(user));
+  }
+
+  @Post(':id/no-show')                        // POST /bookings/<id>/no-show → "nobody came": cancelled with a full refund
+  @HttpCode(200)
+  async reportNoShow(@CurrentUser() user: JWTPayload, @Param('id') id: string) {
+    return this.bookings.reportNoShow(id, await this.customerId(user));
+  }
+
+  @Post(':id/confirm')                        // POST /bookings/<id>/confirm → customer confirms the work was done
   @HttpCode(200)
   async confirm(@CurrentUser() user: JWTPayload, @Param('id') id: string) {
     return this.bookings.confirmForCustomer(id, await this.customerId(user));
@@ -106,6 +119,7 @@ export class BookingsController {
       municipalityCode: area.municipality.code,
       scheduledStart,
       notes: input.notes,
+      ...(input.couponCode !== undefined ? { couponCode: typeof input.couponCode === 'string' ? input.couponCode.trim().toUpperCase() : input.couponCode } : {}),
       serviceFeeCents: pricing.serviceFeeCents,
       commissionBps: service.commissionBps ?? pricing.commissionBps,
     };

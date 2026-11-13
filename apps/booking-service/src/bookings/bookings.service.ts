@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
 import type { Booking } from '../generated/prisma/client.js';
+import { Prisma } from '../generated/prisma/client.js';
 import { OffersService } from '../offers/offers.service.js';
 import { SettingsReader } from '../settings/settings.reader.js';
 import type { CreateBookingDto } from './dto/create-booking.dto.js';
@@ -12,6 +13,9 @@ export const START_STEP_MINUTES = 15; // 10:00, 10:15, 10:30 ... keeps timetable
 
 // Hours after "done" before a job is confirmed automatically, when admin-service has no value for it
 export const DEFAULT_RELEASE_AFTER_HOURS = 48;
+// Cancellation policy when admin-service has no value for it
+export const DEFAULT_FREE_CANCEL_HOURS = 24;
+export const DEFAULT_LATE_CANCEL_FEE_PERCENT = 30;
 
 const MINUTE = 60_000;
 const history = { orderBy: { at: 'asc' }, select: { fromStatus: true, toStatus: true, at: true } } as const;
@@ -50,12 +54,56 @@ export class BookingsService {
     };
   }
 
-  async create(dto: CreateBookingDto) {
+  // The summary step, with the cancellation terms the customer agrees to by booking
+  async previewWithTerms(dto: CreateBookingDto) {
     const preview = this.preview(dto);
-    const { scheduledStart, scheduledEnd, priceCents, serviceFeeCents, totalCents } = preview;
+    const discountCents = dto.couponCode ? await this.couponDiscount(dto) : 0;
+    const totalCents = preview.totalCents - discountCents;
+    const cancellation = await this.cancellationTerms(preview.scheduledStart, preview.priceCents);
+    return { ...preview, discountCents, totalCents, cancellation: {
+      ...cancellation, lateCancelFeeCents: Math.min(cancellation.lateCancelFeeCents, totalCents),
+    } };
+  }
+
+  private async couponDiscount(dto: CreateBookingDto) {
+    const [coupon, previous] = await Promise.all([
+      this.prisma.coupon.findUnique({ where: { code: dto.couponCode } }),
+      this.prisma.booking.findFirst({ where: { customerId: dto.customerId }, select: { id: true } }),
+    ]);
+    if (previous) throw new ConflictException({ code: 'COUPON_FIRST_BOOKING', message: 'Coupon requires a first booking' });
+    if (!coupon?.active) throw new BadRequestException({ code: 'COUPON_INVALID', message: 'Coupon is unavailable' });
+    const { priceCents } = dto.service;
+    const commission = Math.floor((priceCents * dto.commissionBps + 5_000) / 10_000);
+    const requested = coupon.fixedCents ?? Math.round(priceCents * (coupon.percent ?? 0) / 100);
+    // Stripe transfers tied to a charge cannot exceed it. Fund the discount from Plim's share.
+    const discount = Math.min(requested, priceCents, commission + dto.serviceFeeCents, priceCents + dto.serviceFeeCents - 50);
+    if (discount <= 0) throw new BadRequestException({ code: 'COUPON_INVALID', message: 'Coupon is unavailable for this booking' });
+    return discount;
+  }
+
+  // Until when cancelling is free, and what it costs afterwards. Shown before booking and stored with it.
+  async cancellationTerms(scheduledStart: Date, priceCents: number) {
+    const freeHours = await this.settings.number('free_cancel_hours', 'FREE_CANCEL_HOURS', DEFAULT_FREE_CANCEL_HOURS);
+    const feePercent = await this.settings.number('late_cancel_fee_percent', 'LATE_CANCEL_FEE_PERCENT', DEFAULT_LATE_CANCEL_FEE_PERCENT);
+    return {
+      freeCancelUntil: new Date(scheduledStart.getTime() - freeHours * 60 * MINUTE),
+      lateCancelFeeCents: Math.round((priceCents * feePercent) / 100),
+    };
+  }
+
+  async create(dto: CreateBookingDto) {
+    const preview = await this.previewWithTerms(dto);
+    const { scheduledStart, scheduledEnd, priceCents, serviceFeeCents, totalCents, discountCents, cancellation: terms } = preview;
     const { reviewedPrice, commissionBps } = dto;
-    if (reviewedPrice && (reviewedPrice.priceCents !== priceCents || reviewedPrice.serviceFeeCents !== serviceFeeCents)) {
+    if ((dto.couponCode && !reviewedPrice) || (reviewedPrice &&
+        (reviewedPrice.priceCents !== priceCents || reviewedPrice.serviceFeeCents !== serviceFeeCents ||
+          (reviewedPrice.discountCents ?? 0) !== discountCents))) {
       throw new ConflictException({ code: 'BOOKING_PRICE_CHANGED', message: 'Review the updated booking price', preview });
+    }
+    if (reviewedPrice?.freeCancelUntil &&
+        (Date.parse(reviewedPrice.freeCancelUntil) !== terms.freeCancelUntil.getTime() ||
+          reviewedPrice.lateCancelFeeCents !== terms.lateCancelFeeCents)) {
+      throw new ConflictException({ code: 'BOOKING_TERMS_CHANGED', message: 'Review the updated cancellation terms', preview });
     }
     // Round half a cent up using integer arithmetic. The customer fee is outside this split.
     const commissionCents = Math.floor((priceCents * commissionBps + 5_000) / 10_000);
@@ -86,14 +134,21 @@ export class BookingsService {
         priceCents,
         serviceFeeCents,
         totalCents,
+        ...(dto.couponCode ? { couponCode: dto.couponCode, discountCents } : {}),
         commissionBps,
         commissionCents,
         proPayoutCents: priceCents - commissionCents,
+        ...terms,
         vatRate: dto.service.vatRate,
         notes: dto.notes,
         // the first line of the booking's history
         events: { create: { fromStatus: null, toStatus: 'pending_payment', changedBy: dto.customerId } },
       },
+    }).catch((error: unknown) => {
+      if (dto.couponCode && error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException({ code: 'COUPON_FIRST_BOOKING', message: 'Coupon requires a first booking' });
+      }
+      throw error;
     });
 
     // Until payments exist (roadmap step 12), a new booking goes straight to finding a professional.
@@ -117,6 +172,53 @@ export class BookingsService {
       orderBy: { scheduledStart: 'desc' },
     });
     return bookings.map((booking) => this.present(booking));
+  }
+
+  async recordPayment(id: string, payment: { intentId: string; eventId: string; amountCents: number; currency: string }) {
+    if (!payment || !/^pi_[A-Za-z0-9_]+$/.test(payment.intentId) || !/^evt_[A-Za-z0-9_]+$/.test(payment.eventId) ||
+        !Number.isInteger(payment.amountCents) || payment.currency !== 'eur') {
+      throw new BadRequestException('Invalid payment receipt');
+    }
+    const dispatch = await this.prisma.$transaction(async (tx) => {
+      const [booking] = await tx.$queryRaw<{ totalCents: number; status: Booking['status'] }[]>`
+        SELECT total_cents AS "totalCents", status FROM bookings WHERE id = ${id}::uuid FOR UPDATE
+      `;
+      if (!booking) throw new NotFoundException('Booking not found');
+      if (booking.totalCents !== payment.amountCents) throw new ConflictException('Payment does not match booking total');
+      const existing = await tx.bookingReceipt.findUnique({ where: { bookingId: id } });
+      if (existing) {
+        if (existing.intentId !== payment.intentId) throw new ConflictException('Booking already has a different payment');
+        return false;
+      }
+
+      await tx.bookingReceipt.create({ data: { bookingId: id, intentId: payment.intentId, eventId: payment.eventId, amountCents: payment.amountCents } });
+      // A delayed payment can arrive after cancellation. Keep its receipt for refunds.
+      if (booking.status !== 'pending_payment') return false;
+      await tx.booking.update({ where: { id }, data: { status: 'finding_pro' } });
+      await tx.bookingEvent.create({ data: { bookingId: id, fromStatus: 'pending_payment', toStatus: 'finding_pro' } });
+      return true;
+    });
+    if (dispatch) await this.offers.offerNextSafely(id);
+    return { received: true };
+  }
+
+  async pendingSettlements() {
+    const receipts = await this.prisma.bookingReceipt.findMany({
+      where: { settledAt: null, booking: { status: { in: ['confirmed', 'cancelled'] } } },
+      orderBy: [{ receivedAt: 'asc' }, { bookingId: 'asc' }],
+      include: { booking: { select: { status: true, refundCents: true, proPayoutCents: true, professionalId: true } } },
+    });
+    return receipts.map(({ bookingId, intentId, amountCents, booking }) => booking.status === 'cancelled'
+      ? { bookingId, intentId, kind: 'refund', amount: booking.refundCents ?? amountCents }
+      : { bookingId, intentId, kind: 'transfer', amount: booking.proPayoutCents, professionalId: booking.professionalId });
+  }
+
+  async markSettled(id: string) {
+    await this.prisma.bookingReceipt.updateMany({
+      where: { bookingId: id, settledAt: null, booking: { status: { in: ['confirmed', 'cancelled'] } } },
+      data: { settledAt: new Date() },
+    });
+    return { received: true };
   }
 
   // Looked up together with its owner, so nobody can read someone else's booking by guessing an id

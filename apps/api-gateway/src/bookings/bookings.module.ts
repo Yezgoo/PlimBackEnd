@@ -5,10 +5,12 @@ import { BookingsClient } from './bookings.client.js';
 import { BookingsController } from './bookings.controller.js';
 import { MeOffersController } from './me-offers.controller.js';
 import { PricingSettingsClient } from './pricing-settings.client.js';
+import { CheckoutController } from './checkout.controller.js';
+import { PayoutAccountController } from './payout-account.controller.js';
 
 @Module({
   imports: [UsersModule, CatalogModule],
-  controllers: [BookingsController, MeOffersController],
+  controllers: [BookingsController, MeOffersController, CheckoutController, PayoutAccountController],
   providers: [BookingsClient, PricingSettingsClient],
 })
 export class BookingsModule {}

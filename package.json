@@ -22,6 +22,7 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "start:gateway": "nest start api-gateway --watch",
     "start:admin": "nest start admin-service --watch",
+    "start:payments": "nest start payments-service --watch",
     "start:users": "nest start users-service --watch",
     "start:bookings": "nest start booking-service --watch",
     "start:catalog": "nest start catalog-service --watch",
@@ -36,6 +37,7 @@
     "db:bookings:studio": "prisma studio --config apps/booking-service/prisma.config.ts",
     "db:admin:deploy": "prisma migrate deploy --config apps/admin-service/prisma.config.ts",
     "db:admin:generate": "prisma generate --config apps/admin-service/prisma.config.ts",
+    "db:payments:deploy": "node apps/payments-service/migrations/deploy.mjs",
     "db:catalog:migrate": "prisma migrate dev --config apps/catalog-service/prisma.config.ts",
     "db:catalog:deploy": "prisma migrate deploy --config apps/catalog-service/prisma.config.ts",
     "db:catalog:generate": "prisma generate --config apps/catalog-service/prisma.config.ts",
@@ -57,7 +59,8 @@
     "jose": "^6.2.12",
     "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "stripe": "^23.1.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.0",

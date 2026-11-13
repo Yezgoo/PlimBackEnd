@@ -6,7 +6,7 @@ import { BookingsClient } from './bookings.client.js';
 import { MeOffersController } from './me-offers.controller.js';
 
 describe('MeOffersController', () => {
-  const bookingsMock = { listOffers: vi.fn(), acceptOffer: vi.fn(), declineOffer: vi.fn() };
+  const bookingsMock = { listOffers: vi.fn(), acceptOffer: vi.fn(), declineOffer: vi.fn(), cancelForProfessional: vi.fn() };
   const usersMock = { findProfessional: vi.fn() };
   const me = { sub: 'auth0|me' } as JWTPayload;
   let controller: MeOffersController;
@@ -33,5 +33,11 @@ describe('MeOffersController', () => {
 
     await expect(controller.list(me)).rejects.toBeInstanceOf(NotFoundException);
     expect(bookingsMock.listOffers).not.toHaveBeenCalled();
+  });
+
+  it('gives a job back as the signed-in professional', async () => {
+    await controller.cancelBooking(me, 'booking-1');
+
+    expect(bookingsMock.cancelForProfessional).toHaveBeenCalledWith('booking-1', 'pro-1');
   });
 });

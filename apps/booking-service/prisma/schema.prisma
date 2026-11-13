@@ -37,6 +37,8 @@ model Booking {
   priceCents       Int           @map("price_cents")                // copy, VAT included
   serviceFeeCents  Int           @default(0) @map("service_fee_cents")
   totalCents       Int           @map("total_cents")
+  discountCents    Int           @default(0) @map("discount_cents")
+  couponCode       String?       @map("coupon_code")
   commissionBps    Int?          @map("commission_bps")
   commissionCents  Int?          @map("commission_cents")
   proPayoutCents   Int?          @map("pro_payout_cents")
@@ -44,7 +46,14 @@ model Booking {
   currency         String        @default("EUR")
   notes            String?                                           // from the customer to the professional
   status           BookingStatus @default(pending_payment)
-  cancelReason     String?       @map("cancel_reason")
+  // The cancellation terms agreed when booking (copies: later policy changes never touch this booking)
+  freeCancelUntil     DateTime? @map("free_cancel_until")        // the customer may cancel for free until then
+  lateCancelFeeCents  Int?      @map("late_cancel_fee_cents")    // what a later cancellation costs
+  // What happened, if it was cancelled
+  cancelReason     String?       @map("cancel_reason")   // no_pro_found, customer, no_show
+  cancelledAt         DateTime? @map("cancelled_at")
+  cancellationFeeCents Int?     @map("cancellation_fee_cents")  // charged to the customer (0 when free)
+  refundCents         Int?      @map("refund_cents")            // total minus the fee: what goes back to the customer
   doneAt           DateTime?     @map("done_at")                    // the professional marked the work finished
   releaseAt        DateTime?     @map("release_at")                 // when it is confirmed automatically if the customer says nothing
   confirmedAt      DateTime?     @map("confirmed_at")               // confirmed by the customer, or automatically at releaseAt
@@ -52,6 +61,7 @@ model Booking {
   updatedAt        DateTime      @updatedAt @map("updated_at")
 
   events BookingEvent[]
+  payment BookingReceipt?
   offers BookingOffer[]
 
   @@index([customerId, scheduledStart])
@@ -59,6 +69,27 @@ model Booking {
   @@index([status])
   @@index([status, releaseAt])
   @@map("bookings")
+}
+
+model Coupon {
+  code String @id
+  fixedCents Int? @map("fixed_cents")
+  percent Int?
+  active Boolean @default(true)
+
+  @@map("coupons")
+}
+
+model BookingReceipt {
+  bookingId String @id @map("booking_id") @db.Uuid
+  intentId String @unique @map("intent_id")
+  eventId String @unique @map("event_id")
+  amountCents Int @map("amount_cents")
+  receivedAt DateTime @default(now()) @map("received_at")
+  settledAt DateTime? @map("settled_at")
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("booking_receipts")
 }
 
 enum OfferStatus {

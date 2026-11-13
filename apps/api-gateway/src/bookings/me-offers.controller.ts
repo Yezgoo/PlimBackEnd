@@ -48,6 +48,12 @@ export class MeOffersController {
     return this.bookings.advanceForProfessional(id, await this.professionalId(user), status);
   }
 
+  @Post('bookings/:id/cancel')                // give a job back: the customer keeps the booking, the next professional is asked
+  @HttpCode(200)
+  async cancelBooking(@CurrentUser() user: JWTPayload, @Param('id') id: string) {
+    return this.bookings.cancelForProfessional(id, await this.professionalId(user));
+  }
+
   // 404 here means the caller never applied as a professional
   private async professionalId(user: JWTPayload) {
     return (await this.users.findProfessional(user.sub!)).id;

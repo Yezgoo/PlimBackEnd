@@ -65,6 +65,20 @@ export class BookingAddressDto {
 }
 
 class ReviewedPriceDto {
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  discountCents?: number;
+
+  @IsOptional()
+  @IsDateString()
+  freeCancelUntil?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  lateCancelFeeCents?: number;
+
   @IsInt()
   @Min(1)
   priceCents!: number;
@@ -75,6 +89,10 @@ class ReviewedPriceDto {
 }
 
 export class CreateBookingDto {
+  @IsOptional()
+  @Matches(/^[A-Z0-9_-]{1,32}$/)
+  couponCode?: string;
+
   @IsUUID()
   customerId!: string; // users-service user id, resolved by the gateway from the token
 

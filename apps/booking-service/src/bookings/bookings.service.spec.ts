@@ -31,11 +31,12 @@ const dto = (overrides: Partial<CreateBookingDto> = {}): CreateBookingDto => ({
 
 describe('BookingsService', () => {
   const prismaMock = {
+    coupon: { findUnique: vi.fn() },
     booking: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn(), findUniqueOrThrow: vi.fn(), updateMany: vi.fn() },
     bookingEvent: { create: vi.fn() },
     $transaction: vi.fn(),
   };
-  const offersMock = { start: vi.fn() };
+  const offersMock = { start: vi.fn(), offerNextSafely: vi.fn() };
   // no admin-service in unit tests: every setting answers its default
   const settingsMock = { number: vi.fn(async (_key: string, _envName: string, fallback: number) => fallback) };
   let service: BookingsService;
@@ -141,6 +142,77 @@ describe('BookingsService', () => {
       expect(prismaMock.booking.create).not.toHaveBeenCalled();
       expect(offersMock.start).not.toHaveBeenCalled();
     });
+
+    it('asks the customer to review changed cancellation terms before creating a booking', async () => {
+      await expect(service.create(dto({ reviewedPrice: {
+        priceCents: 6500, serviceFeeCents: 200,
+        freeCancelUntil: '2026-11-17T15:00:00Z', lateCancelFeeCents: 1500,
+      } }))).rejects.toMatchObject({
+        response: { code: 'BOOKING_TERMS_CHANGED', preview: { cancellation: { lateCancelFeeCents: 1950 } } },
+      });
+      expect(prismaMock.booking.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('recording Stripe payments', () => {
+    const payment = { intentId: 'pi_fixture', eventId: 'evt_fixture', amountCents: 6700, currency: 'eur' };
+
+    function paymentTransaction(status: string, existing: object | null = null) {
+      const tx = {
+        $queryRaw: vi.fn().mockResolvedValue([{ totalCents: 6700, status }]),
+        bookingReceipt: { findUnique: vi.fn().mockResolvedValue(existing), create: vi.fn() },
+        booking: { update: vi.fn() },
+        bookingEvent: { create: vi.fn() },
+      };
+      prismaMock.$transaction.mockImplementationOnce((work) => work(tx));
+      return tx;
+    }
+
+    it('records the receipt and transitions a pending booking before dispatch', async () => {
+      const tx = paymentTransaction('pending_payment');
+      await expect(service.recordPayment('booking-1', payment)).resolves.toEqual({ received: true });
+      expect(tx.bookingReceipt.create).toHaveBeenCalledOnce();
+      expect(tx.booking.update).toHaveBeenCalledWith({ where: { id: 'booking-1' }, data: { status: 'finding_pro' } });
+      expect(offersMock.offerNextSafely).toHaveBeenCalledWith('booking-1');
+    });
+
+    it('records a late receipt on a cancelled booking without restarting dispatch', async () => {
+      const tx = paymentTransaction('cancelled');
+      await service.recordPayment('booking-1', payment);
+      expect(tx.bookingReceipt.create).toHaveBeenCalledOnce();
+      expect(tx.booking.update).not.toHaveBeenCalled();
+      expect(offersMock.offerNextSafely).not.toHaveBeenCalled();
+    });
+
+    it('ignores a repeated success and rejects a mismatched amount', async () => {
+      const duplicate = paymentTransaction('finding_pro', { intentId: payment.intentId });
+      await service.recordPayment('booking-1', payment);
+      expect(duplicate.bookingReceipt.create).not.toHaveBeenCalled();
+      const wrongAmount = paymentTransaction('pending_payment');
+      await expect(service.recordPayment('booking-1', { ...payment, amountCents: 6600 })).rejects.toBeInstanceOf(ConflictException);
+      expect(wrongAmount.bookingReceipt.create).not.toHaveBeenCalled();
+    });
+  });
+
+  it.each([[500, null, 500], [null, 10, 650], [null, 100, 1500]])(
+    'applies fixed %s or percentage %s within the platform share',
+    async (fixedCents, percent, discountCents) => {
+      prismaMock.coupon.findUnique.mockResolvedValue({ active: true, fixedCents, percent });
+      await expect(service.previewWithTerms(dto({ couponCode: 'WELCOME' })))
+        .resolves.toMatchObject({ discountCents, totalCents: 6700 - discountCents });
+    },
+  );
+
+  it('requires a first booking and a reviewed discount', async () => {
+    prismaMock.coupon.findUnique.mockResolvedValue({ active: true, fixedCents: 500 });
+    await expect(service.create(dto({ couponCode: 'WELCOME' }))).rejects.toMatchObject({
+      response: { code: 'BOOKING_PRICE_CHANGED', preview: { discountCents: 500 } },
+    });
+    prismaMock.booking.findFirst.mockResolvedValueOnce({ id: 'previous' });
+    await expect(service.previewWithTerms(dto({ couponCode: 'WELCOME' }))).rejects.toMatchObject({
+      response: { code: 'COUPON_FIRST_BOOKING' },
+    });
+    expect(prismaMock.booking.create).not.toHaveBeenCalled();
   });
 
   describe('when a booking may start', () => {
@@ -312,6 +384,35 @@ describe('BookingsService', () => {
 
       await expect(service.autoConfirmDue()).resolves.toBe(0);
       expect(prismaMock.bookingEvent.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cancellation terms', () => {
+    it('are free until 24 hours before the start, then 30% of the service price', async () => {
+      await expect(service.cancellationTerms(new Date('2026-11-18T15:00:00Z'), 6500)).resolves.toEqual({
+        freeCancelUntil: new Date('2026-11-17T15:00:00Z'),
+        lateCancelFeeCents: 1950,
+      });
+    });
+
+    it('follow the admin settings', async () => {
+      settingsMock.number.mockImplementation(async (key: string) => (key === 'free_cancel_hours' ? 48 : 50));
+
+      await expect(service.cancellationTerms(new Date('2026-11-18T15:00:00Z'), 6500)).resolves.toEqual({
+        freeCancelUntil: new Date('2026-11-16T15:00:00Z'),
+        lateCancelFeeCents: 3250,
+      });
+    });
+
+    it('are shown in the summary and stored with the booking', async () => {
+      const summary = await service.previewWithTerms(dto());
+      expect(summary.cancellation).toEqual({ freeCancelUntil: new Date('2026-11-17T15:00:00Z'), lateCancelFeeCents: 1950 });
+
+      await service.create(dto());
+      expect(prismaMock.booking.create.mock.calls[0][0].data).toMatchObject({
+        freeCancelUntil: new Date('2026-11-17T15:00:00Z'),
+        lateCancelFeeCents: 1950,
+      });
     });
   });
 });

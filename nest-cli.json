@@ -10,6 +10,13 @@
   "monorepo": true,
   "root": "apps/api-gateway",
   "projects": {
+    "payments-service": {
+      "type": "application",
+      "root": "apps/payments-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/payments-service/src",
+      "compilerOptions": { "tsConfigPath": "apps/payments-service/tsconfig.app.json" }
+    },
     "admin-service": {
       "type": "application",
       "root": "apps/admin-service",
