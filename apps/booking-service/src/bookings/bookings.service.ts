@@ -2,12 +2,16 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import { PrismaService } from '../database/prisma.service.js';
 import type { Booking } from '../generated/prisma/client.js';
 import { OffersService } from '../offers/offers.service.js';
+import { SettingsReader } from '../settings/settings.reader.js';
 import type { CreateBookingDto } from './dto/create-booking.dto.js';
 
 // When a job may be booked for
 export const MIN_LEAD_MINUTES = 120; // not sooner than 2 hours from now: a professional has to be found and get there
 export const MAX_DAYS_AHEAD = 90;
 export const START_STEP_MINUTES = 15; // 10:00, 10:15, 10:30 ... keeps timetables tidy
+
+// Hours after "done" before a job is confirmed automatically, when admin-service has no value for it
+export const DEFAULT_RELEASE_AFTER_HOURS = 48;
 
 const MINUTE = 60_000;
 const history = { orderBy: { at: 'asc' }, select: { fromStatus: true, toStatus: true, at: true } } as const;
@@ -25,6 +29,7 @@ export class BookingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly offers: OffersService,
+    private readonly settings: SettingsReader,
   ) {}
 
   // The last step of the booking screens: "this is what you are about to book". Saves nothing.
@@ -145,10 +150,18 @@ export class BookingsService {
     const fromStatus = previousStatus.get(status);
     if (!fromStatus) throw new BadRequestException('Unsupported booking status');
 
+    // "done" starts the clock: the customer confirms, or it is confirmed automatically at releaseAt
+    let finished = {};
+    if (status === 'done') {
+      const hours = await this.settings.number('release_after_hours', 'RELEASE_AFTER_HOURS', DEFAULT_RELEASE_AFTER_HOURS);
+      const doneAt = new Date();
+      finished = { doneAt, releaseAt: new Date(doneAt.getTime() + hours * 60 * MINUTE) };
+    }
+
     const booking = await this.prisma.$transaction(async (tx) => {
       const moved = await tx.booking.updateMany({
         where: { id, professionalId, status: fromStatus },
-        data: { status },
+        data: { status, ...finished },
       });
       if (moved.count) {
         await tx.bookingEvent.create({ data: { bookingId: id, fromStatus, toStatus: status, changedBy: professionalId } });
@@ -159,6 +172,51 @@ export class BookingsService {
       return current;
     });
     return this.present(booking, true);
+  }
+
+  // The customer says "yes, the work was done". This is what releases the professional's payment.
+  async confirmForCustomer(id: string, customerId: string) {
+    const booking = await this.prisma.$transaction(async (tx) => {
+      const moved = await tx.booking.updateMany({
+        where: { id, customerId, status: 'done' },
+        data: { status: 'confirmed', confirmedAt: new Date() },
+      });
+      if (moved.count) {
+        await tx.bookingEvent.create({ data: { bookingId: id, fromStatus: 'done', toStatus: 'confirmed', changedBy: customerId } });
+      }
+      const current = await tx.booking.findFirst({ where: { id, customerId }, include: { events: history } });
+      if (!current) throw new NotFoundException(`Booking ${id} not found`);
+      // already confirmed (a second tap, or the automatic confirmation got there first) is fine
+      if (current.status !== 'confirmed') throw new ConflictException('Only a finished job can be confirmed');
+      return current;
+    });
+    return this.present(booking);
+  }
+
+  // Called by the sweeper: jobs finished long enough ago, with no answer from the customer, are confirmed
+  // so the professional is not left waiting for their money. (A disputed job is not "done", so it is skipped.)
+  async autoConfirmDue() {
+    const due = await this.prisma.booking.findMany({
+      where: { status: 'done', releaseAt: { lte: new Date() } },
+      select: { id: true },
+      take: 50,
+    });
+    let confirmed = 0;
+    for (const { id } of due) {
+      confirmed += await this.prisma.$transaction(async (tx) => {
+        // only succeeds if the customer did not confirm (or dispute) in the meantime
+        const moved = await tx.booking.updateMany({
+          where: { id, status: 'done' },
+          data: { status: 'confirmed', confirmedAt: new Date() },
+        });
+        if (moved.count) {
+          await tx.bookingEvent.create({ data: { bookingId: id, fromStatus: 'done', toStatus: 'confirmed', changedBy: null } });
+        }
+        return moved.count;
+      });
+    }
+    if (confirmed) this.logger.log(`Confirmed ${confirmed} finished job(s) automatically`);
+    return confirmed;
   }
 
   private schedule(dto: CreateBookingDto) {

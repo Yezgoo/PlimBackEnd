@@ -132,6 +132,10 @@ Content-Type: application/json
 GET http://localhost:3000/bookings
 Authorization: Bearer {{token}}
 
+### Confirm a finished job (status "done") → "confirmed"
+POST http://localhost:3000/bookings/PASTE-BOOKING-ID/confirm
+Authorization: Bearer {{token}}
+
 ### One booking, with its status history
 GET http://localhost:3000/bookings/PASTE-BOOKING-ID
 Authorization: Bearer {{token}}

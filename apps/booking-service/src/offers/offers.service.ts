@@ -1,14 +1,11 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma, type Booking, type BookingOffer, type OfferStatus } from '../generated/prisma/client.js';
+import { SettingsReader } from '../settings/settings.reader.js';
 import { ProfessionalsDirectory } from './professionals.directory.js';
 
-// How the search for a professional behaves. Read on each use, so a change in .env needs only a restart.
-// (These become admin settings in roadmap step 12a.)
-export const dispatchRules = () => ({
-  offerMinutes: Number(process.env.OFFER_TIMEOUT_MINUTES ?? 15), // time a professional has to answer
-  maxOffers: Number(process.env.MAX_OFFERS ?? 5),                // professionals asked before giving up
-});
+// How the search for a professional behaves when admin-service has no value for it
+export const DISPATCH_DEFAULTS = { offerMinutes: 15, maxOffers: 5 };
 
 // A professional is busy when one of their jobs in these states overlaps the new one
 const BUSY: Booking['status'][] = ['accepted', 'en_route', 'in_progress'];
@@ -27,6 +24,7 @@ export class OffersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly directory: ProfessionalsDirectory,
+    private readonly settings: SettingsReader,
   ) {}
 
   async start(bookingId: string) {
@@ -41,7 +39,9 @@ export class OffersService {
     if (!booking || booking.status !== 'finding_pro') return;
     if (booking.offers.some((offer) => offer.status === 'pending')) return;
 
-    const { offerMinutes, maxOffers } = dispatchRules();
+    // admin settings: the time a professional has to answer, and how many are asked before giving up
+    const offerMinutes = await this.settings.number('offer_timeout_minutes', 'OFFER_TIMEOUT_MINUTES', DISPATCH_DEFAULTS.offerMinutes);
+    const maxOffers = await this.settings.number('max_offers', 'MAX_OFFERS', DISPATCH_DEFAULTS.maxOffers);
     if (booking.offers.length >= maxOffers || booking.scheduledStart <= new Date()) {
       return this.giveUp(booking.id);
     }

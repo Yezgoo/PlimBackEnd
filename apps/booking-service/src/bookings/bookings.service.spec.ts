@@ -4,6 +4,7 @@ import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { BookingsService } from './bookings.service.js';
 import { OffersService } from '../offers/offers.service.js';
+import { SettingsReader } from '../settings/settings.reader.js';
 import type { CreateBookingDto } from './dto/create-booking.dto.js';
 
 // "now" is fixed, so the date rules can be tested exactly
@@ -35,6 +36,8 @@ describe('BookingsService', () => {
     $transaction: vi.fn(),
   };
   const offersMock = { start: vi.fn() };
+  // no admin-service in unit tests: every setting answers its default
+  const settingsMock = { number: vi.fn(async (_key: string, _envName: string, fallback: number) => fallback) };
   let service: BookingsService;
 
   beforeEach(() => {
@@ -46,7 +49,12 @@ describe('BookingsService', () => {
     // after dispatch starts, the booking is read again: by default hand back what was created
     prismaMock.booking.findUniqueOrThrow.mockImplementation(async () => prismaMock.booking.create.mock.results[0].value);
     delete process.env.PAYMENTS_REQUIRED;
-    service = new BookingsService(prismaMock as unknown as PrismaService, offersMock as unknown as OffersService);
+    settingsMock.number.mockImplementation(async (_key: string, _envName: string, fallback: number) => fallback);
+    service = new BookingsService(
+      prismaMock as unknown as PrismaService,
+      offersMock as unknown as OffersService,
+      settingsMock as unknown as SettingsReader,
+    );
   });
 
   afterEach(() => vi.useRealTimers());
@@ -209,7 +217,8 @@ describe('BookingsService', () => {
       await expect(service.advanceForProfessional('booking-1', 'pro-1', status)).resolves.toMatchObject({ status, events: [event] });
       expect(prismaMock.booking.updateMany).toHaveBeenCalledWith({
         where: { id: 'booking-1', professionalId: 'pro-1', status: fromStatus },
-        data: { status },
+        // "done" also starts the 48 hour clock towards automatic confirmation
+        data: status === 'done' ? { status, doneAt: NOW, releaseAt: new Date(NOW.getTime() + 48 * 3_600_000) } : { status },
       });
       expect(prismaMock.bookingEvent.create).toHaveBeenCalledWith({
         data: { bookingId: 'booking-1', fromStatus, toStatus: status, changedBy: 'pro-1' },
@@ -227,6 +236,81 @@ describe('BookingsService', () => {
       await expect(service.advanceForProfessional('booking-1', 'pro-1', 'done')).rejects.toBeInstanceOf(ConflictException);
       await expect(service.advanceForProfessional('booking-1', 'pro-2', 'en_route')).rejects.toBeInstanceOf(NotFoundException);
       await expect(service.advanceForProfessional('booking-1', 'pro-1', 'confirmed')).rejects.toBeInstanceOf(BadRequestException);
+      expect(prismaMock.bookingEvent.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('confirming a finished job', () => {
+    beforeEach(() => {
+      prismaMock.$transaction.mockImplementation(async (work) => work(prismaMock));
+      prismaMock.booking.updateMany.mockResolvedValue({ count: 1 });
+    });
+
+    it('uses the admin setting for how long the customer has to answer', async () => {
+      settingsMock.number.mockResolvedValue(24);
+      prismaMock.booking.findFirst.mockResolvedValue({ status: 'done', vatRate: 0.23 });
+
+      await service.advanceForProfessional('booking-1', 'pro-1', 'done');
+
+      expect(settingsMock.number).toHaveBeenCalledWith('release_after_hours', 'RELEASE_AFTER_HOURS', 48);
+      expect(prismaMock.booking.updateMany.mock.calls[0][0].data.releaseAt).toEqual(new Date(NOW.getTime() + 24 * 3_600_000));
+    });
+
+    it('lets the customer confirm, and writes it in the history under their name', async () => {
+      prismaMock.booking.findFirst.mockResolvedValue({ status: 'confirmed', vatRate: 0.23 });
+
+      await expect(service.confirmForCustomer('booking-1', 'customer-1')).resolves.toMatchObject({ status: 'confirmed' });
+      expect(prismaMock.booking.updateMany).toHaveBeenCalledWith({
+        where: { id: 'booking-1', customerId: 'customer-1', status: 'done' },
+        data: { status: 'confirmed', confirmedAt: NOW },
+      });
+      expect(prismaMock.bookingEvent.create).toHaveBeenCalledWith({
+        data: { bookingId: 'booking-1', fromStatus: 'done', toStatus: 'confirmed', changedBy: 'customer-1' },
+      });
+    });
+
+    it('a second confirmation changes nothing and is not an error', async () => {
+      prismaMock.booking.updateMany.mockResolvedValue({ count: 0 });
+      prismaMock.booking.findFirst.mockResolvedValue({ status: 'confirmed', vatRate: 0.23 });
+
+      await expect(service.confirmForCustomer('booking-1', 'customer-1')).resolves.toMatchObject({ status: 'confirmed' });
+      expect(prismaMock.bookingEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses to confirm a job that is not finished yet', async () => {
+      prismaMock.booking.updateMany.mockResolvedValue({ count: 0 });
+      prismaMock.booking.findFirst.mockResolvedValue({ status: 'in_progress', vatRate: 0.23 });
+
+      await expect(service.confirmForCustomer('booking-1', 'customer-1')).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('never confirms another customer\'s booking', async () => {
+      prismaMock.booking.updateMany.mockResolvedValue({ count: 0 });
+      prismaMock.booking.findFirst.mockResolvedValue(null);
+
+      await expect(service.confirmForCustomer('booking-1', 'someone-else')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('autoConfirmDue() confirms jobs whose time is up, as the system', async () => {
+      prismaMock.booking.findMany.mockResolvedValue([{ id: 'booking-1' }, { id: 'booking-2' }]);
+
+      await expect(service.autoConfirmDue()).resolves.toBe(2);
+
+      expect(prismaMock.booking.findMany.mock.calls[0][0].where).toEqual({ status: 'done', releaseAt: { lte: NOW } });
+      expect(prismaMock.booking.updateMany).toHaveBeenCalledWith({
+        where: { id: 'booking-1', status: 'done' },
+        data: { status: 'confirmed', confirmedAt: NOW },
+      });
+      expect(prismaMock.bookingEvent.create).toHaveBeenCalledWith({
+        data: { bookingId: 'booking-2', fromStatus: 'done', toStatus: 'confirmed', changedBy: null },
+      });
+    });
+
+    it('autoConfirmDue() writes no history when the customer got there first', async () => {
+      prismaMock.booking.findMany.mockResolvedValue([{ id: 'booking-1' }]);
+      prismaMock.booking.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.autoConfirmDue()).resolves.toBe(0);
       expect(prismaMock.bookingEvent.create).not.toHaveBeenCalled();
     });
   });

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { OffersService } from './offers.service.js';
+import { SettingsReader } from '../settings/settings.reader.js';
 import { ProfessionalsDirectory } from './professionals.directory.js';
 
 const NOW = new Date('2026-11-16T10:00:00Z');
@@ -50,6 +51,12 @@ describe('OffersService', () => {
     $transaction: vi.fn((work: (tx: unknown) => unknown) => work(prismaMock)),
   };
   const directoryMock = { eligibleFor: vi.fn() };
+  // like the real reader: an environment variable wins, otherwise the default (no admin-service in unit tests)
+  const settingsMock = {
+    number: vi.fn(async (_key: string, envName: string, fallback: number) =>
+      process.env[envName] ? Number(process.env[envName]) : fallback,
+    ),
+  };
   let service: OffersService;
 
   beforeEach(() => {
@@ -63,7 +70,14 @@ describe('OffersService', () => {
     prismaMock.booking.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.bookingOffer.updateMany.mockResolvedValue({ count: 1 });
     directoryMock.eligibleFor.mockResolvedValue([candidate('pro-a'), candidate('pro-b')]);
-    service = new OffersService(prismaMock as unknown as PrismaService, directoryMock as unknown as ProfessionalsDirectory);
+    settingsMock.number.mockImplementation(async (_key: string, envName: string, fallback: number) =>
+      process.env[envName] ? Number(process.env[envName]) : fallback,
+    );
+    service = new OffersService(
+      prismaMock as unknown as PrismaService,
+      directoryMock as unknown as ProfessionalsDirectory,
+      settingsMock as unknown as SettingsReader,
+    );
   });
 
   afterEach(() => vi.useRealTimers());
@@ -151,6 +165,16 @@ describe('OffersService', () => {
       expect(prismaMock.bookingEvent.create).toHaveBeenCalledWith({
         data: { bookingId: 'booking-1', fromStatus: 'finding_pro', toStatus: 'cancelled', changedBy: null },
       });
+    });
+
+    it('takes the deadline and the limit from the admin settings', async () => {
+      settingsMock.number.mockImplementation(async (key: string) => (key === 'offer_timeout_minutes' ? 30 : 5));
+
+      await service.offerNext('booking-1');
+
+      expect(settingsMock.number).toHaveBeenCalledWith('offer_timeout_minutes', 'OFFER_TIMEOUT_MINUTES', 15);
+      expect(settingsMock.number).toHaveBeenCalledWith('max_offers', 'MAX_OFFERS', 5);
+      expect(prismaMock.bookingOffer.create.mock.calls[0][0].data.expiresAt).toEqual(new Date('2026-11-16T10:30:00Z'));
     });
 
     it('gives up after MAX_OFFERS professionals, even if more exist', async () => {

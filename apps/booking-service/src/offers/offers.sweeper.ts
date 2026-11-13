@@ -1,8 +1,10 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { BookingsService } from '../bookings/bookings.service.js';
 import { OffersService } from './offers.service.js';
 
-// The clock behind the offers: every OFFER_SWEEP_MS it closes offers whose deadline passed
-// (which asks the next professional) and retries bookings that are stuck with nobody being asked.
+// The clock behind bookings: every OFFER_SWEEP_MS it closes offers whose deadline passed (which asks
+// the next professional), retries bookings that are stuck with nobody being asked, and confirms
+// finished jobs the customer did not answer about in time.
 @Injectable()
 export class OffersSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(OffersSweeper.name);
@@ -10,7 +12,10 @@ export class OffersSweeper implements OnModuleInit, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
   private running = false;
 
-  constructor(private readonly offers: OffersService) {}
+  constructor(
+    private readonly offers: OffersService,
+    private readonly bookings: BookingsService,
+  ) {}
 
   onModuleInit() {
     this.timer = setInterval(() => void this.sweep(), this.everyMs);
@@ -26,6 +31,7 @@ export class OffersSweeper implements OnModuleInit, OnModuleDestroy {
     try {
       await this.offers.expireDue();
       await this.offers.retryStalled();
+      await this.bookings.autoConfirmDue();
     } catch (e) {
       this.logger.error('Offer sweep failed', e as Error);
     } finally {

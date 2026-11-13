@@ -119,6 +119,11 @@ export class BookingsClient {
     });
   }
 
+  confirmForCustomer(id: string, customerId: string): Promise<Booking> {
+    const path = `/bookings/${encodeURIComponent(id)}/confirm?customerId=${encodeURIComponent(customerId)}`;
+    return this.request(path, { method: 'POST' });
+  }
+
   // --- job offers, as the professional sees them ---
 
   listOffers(professionalId: string, status?: string): Promise<JobOffer[]> {

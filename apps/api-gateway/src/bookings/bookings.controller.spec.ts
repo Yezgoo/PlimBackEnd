@@ -8,7 +8,7 @@ import { BookingsController, type BookingInput } from './bookings.controller.js'
 import { PricingSettingsClient } from './pricing-settings.client.js';
 
 describe('BookingsController', () => {
-  const bookingsMock = { preview: vi.fn(), create: vi.fn(), listForCustomer: vi.fn(), findForCustomer: vi.fn() };
+  const bookingsMock = { preview: vi.fn(), create: vi.fn(), listForCustomer: vi.fn(), findForCustomer: vi.fn(), confirmForCustomer: vi.fn() };
   const usersMock = { findByAuth0Id: vi.fn() };
   const catalogMock = { findBookingTerms: vi.fn(), findArea: vi.fn() };
   const pricingMock = { read: vi.fn() };
@@ -146,5 +146,11 @@ describe('BookingsController', () => {
 
     expect(bookingsMock.listForCustomer).toHaveBeenCalledWith('user-1');
     expect(bookingsMock.findForCustomer).toHaveBeenCalledWith('booking-9', 'user-1');
+  });
+
+  it('confirms a finished job as the logged-in customer', async () => {
+    await controller.confirm(me, 'booking-9');
+
+    expect(bookingsMock.confirmForCustomer).toHaveBeenCalledWith('booking-9', 'user-1');
   });
 });

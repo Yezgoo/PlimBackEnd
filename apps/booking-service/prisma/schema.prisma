@@ -45,6 +45,9 @@ model Booking {
   notes            String?                                           // from the customer to the professional
   status           BookingStatus @default(pending_payment)
   cancelReason     String?       @map("cancel_reason")
+  doneAt           DateTime?     @map("done_at")                    // the professional marked the work finished
+  releaseAt        DateTime?     @map("release_at")                 // when it is confirmed automatically if the customer says nothing
+  confirmedAt      DateTime?     @map("confirmed_at")               // confirmed by the customer, or automatically at releaseAt
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
 
@@ -54,6 +57,7 @@ model Booking {
   @@index([customerId, scheduledStart])
   @@index([professionalId, scheduledStart])
   @@index([status])
+  @@index([status, releaseAt])
   @@map("bookings")
 }
 

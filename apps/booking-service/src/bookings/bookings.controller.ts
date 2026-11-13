@@ -44,6 +44,12 @@ export class BookingsController {
     return this.bookings.advanceForProfessional(id, professionalId, status);
   }
 
+  @Post(':id/confirm')                        // the customer confirms a finished job
+  @HttpCode(200)
+  confirm(@Param('id', ParseUUIDPipe) id: string, @Query('customerId', ParseUUIDPipe) customerId: string) {
+    return this.bookings.confirmForCustomer(id, customerId);
+  }
+
   @Get(':id')                                 // GET /bookings/<id>?customerId=<uuid> → with its status history
   find(@Param('id', ParseUUIDPipe) id: string, @Query('customerId', ParseUUIDPipe) customerId: string) {
     return this.bookings.findForCustomer(id, customerId);

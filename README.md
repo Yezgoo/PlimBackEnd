@@ -124,6 +124,7 @@ come from the booking service environment.
 | POST | `/bookings` | logged-in person | Same body, with optional `reviewedPrice: { priceCents, serviceFeeCents }` for checkout confirmation. If either reviewed amount changed, returns `409 BOOKING_PRICE_CHANGED` with an updated preview and creates nothing |
 | GET | `/bookings` | logged-in person | Caller's bookings, latest first |
 | GET | `/bookings/:id` | logged-in person | One of the caller's bookings, with its status history |
+| POST | `/bookings/:id/confirm` | logged-in person | The customer confirms a finished (`done`) job. Without an answer it is confirmed automatically after `release_after_hours` (48 by default) |
 | GET | `/me/professional/offers` | logged-in person | Jobs offered to the caller as a professional; `?status=pending` for the ones waiting for an answer |
 | POST | `/me/professional/offers/:id/accept` | logged-in person | Take the job. The answer includes the full address and the customer's notes |
 | POST | `/me/professional/offers/:id/decline` | logged-in person | Pass: the next professional is asked |

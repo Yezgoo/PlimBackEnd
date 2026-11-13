@@ -50,6 +50,12 @@ export class BookingsController {
     return this.bookings.findForCustomer(id, await this.customerId(user));
   }
 
+  @Post(':id/confirm')                        // POST /bookings/<id>/confirm → "the work was done"; releases the pro's payment
+  @HttpCode(200)
+  async confirm(@CurrentUser() user: JWTPayload, @Param('id') id: string) {
+    return this.bookings.confirmForCustomer(id, await this.customerId(user));
+  }
+
   // 404 here means the person has no Plim profile yet (the app sends them to "complete profile")
   private async customerId(user: JWTPayload) {
     return (await this.users.findByAuth0Id(user.sub!)).id;
