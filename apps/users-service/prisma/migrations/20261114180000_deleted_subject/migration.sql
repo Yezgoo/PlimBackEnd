@@ -1,0 +1,2 @@
+ALTER TABLE account_deletion_receipts ADD COLUMN subject_hash TEXT;
+CREATE UNIQUE INDEX account_deletion_receipts_subject_hash_key ON account_deletion_receipts(subject_hash);

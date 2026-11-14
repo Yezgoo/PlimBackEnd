@@ -15,11 +15,14 @@ export class UsersService {
   ) {}
 
   async create(data: CreateUserDto) {
+    const { privacyVersion, ...profile } = data;
     let user: User;
     try {
       // the user and its user.registered event are saved together: both or neither
       user = await this.prisma.$transaction(async (tx) => {
-        const created = await tx.user.create({ data });
+        const created = await tx.user.create({
+          data: privacyVersion ? { ...profile, consents: { create: { version: privacyVersion } } } : profile,
+        });
         const event = this.userRegistered(created);
         await tx.outboxEvent.create({
           data: { id: event.eventId, topic: USER_REGISTERED_TOPIC, key: created.id, payload: event },
@@ -66,7 +69,7 @@ export class UsersService {
       eventId: randomUUID(),
       type: 'user.registered',
       occurredAt: new Date().toISOString(),
-      data: { userId: user.id, auth0Id: user.auth0Id, email: user.email, name: user.name },
+      data: { userId: user.id },
     };
   }
 }

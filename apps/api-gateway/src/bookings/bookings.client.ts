@@ -130,6 +130,21 @@ export class BookingsClient {
     return this.request(`/bookings/${encodeURIComponent(id)}/cancel?customerId=${encodeURIComponent(customerId)}`, { method: 'POST' });
   }
 
+  openDispute(id: string, customerId: string, evidence: unknown): Promise<Booking> {
+    const path = `/bookings/${encodeURIComponent(id)}/dispute?customerId=${encodeURIComponent(customerId)}`;
+    return this.request(path, { method: 'POST', body: JSON.stringify({ evidence }) });
+  }
+
+  listDisputes() {
+    return this.request('/disputes');
+  }
+
+  resolveDispute(id: string, decision: unknown, admin: string) {
+    return this.request(`/disputes/${encodeURIComponent(id)}/resolve`, {
+      method: 'POST', body: JSON.stringify({ decision, admin }),
+    });
+  }
+
   reportNoShow(id: string, customerId: string): Promise<Booking> {
     return this.request(`/bookings/${encodeURIComponent(id)}/no-show?customerId=${encodeURIComponent(customerId)}`, { method: 'POST' });
   }

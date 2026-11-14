@@ -8,12 +8,10 @@ export class ProfessionalNotifier {
   private readonly logger = new Logger(ProfessionalNotifier.name);
 
   async onApproved(event: ProfessionalApprovedEvent) {
-    const { email, name } = event.data;
-    this.logger.log(`Would tell ${email} (${name ?? 'no name'}) they are approved and can start receiving jobs`);
+    this.logger.log(`Approval notification eligible for event ${event.eventId}`);
   }
 
   async onRejected(event: ProfessionalRejectedEvent) {
-    const { email, reason } = event.data;
-    this.logger.log(`Would tell ${email} their application needs changes: ${reason}`);
+    this.logger.log(`Rejection notification eligible for event ${event.eventId}`);
   }
 }

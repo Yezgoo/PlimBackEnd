@@ -35,6 +35,7 @@ describe('BookingsService', () => {
     booking: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn(), findUniqueOrThrow: vi.fn(), updateMany: vi.fn() },
     bookingEvent: { create: vi.fn() },
     $transaction: vi.fn(),
+    $queryRaw: vi.fn(),
   };
   const offersMock = { start: vi.fn(), offerNextSafely: vi.fn() };
   // no admin-service in unit tests: every setting answers its default
@@ -43,6 +44,7 @@ describe('BookingsService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.$transaction.mockImplementation(async fn => fn(prismaMock));
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
     prismaMock.booking.findFirst.mockResolvedValue(null);
@@ -59,6 +61,23 @@ describe('BookingsService', () => {
   });
 
   afterEach(() => vi.useRealTimers());
+
+  it('does not expire a booking that a payment already moved forward', async () => {
+    process.env.PAYMENTS_REQUIRED = 'true';
+    prismaMock.booking.findMany.mockResolvedValue([{ id: 'booking-1' }]);
+    prismaMock.booking.updateMany.mockResolvedValue({ count: 0 });
+    await service.expireUnpaid();
+    expect(prismaMock.bookingEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('records payment expiry only after winning the pending status update', async () => {
+    process.env.PAYMENTS_REQUIRED = 'true';
+    prismaMock.booking.findMany.mockResolvedValue([{ id: 'booking-1' }]);
+    prismaMock.booking.updateMany.mockResolvedValue({ count: 1 });
+    await service.expireUnpaid();
+    expect(prismaMock.booking.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'booking-1', status: 'pending_payment' } }));
+    expect(prismaMock.bookingEvent.create).toHaveBeenCalledWith({ data: { bookingId: 'booking-1', fromStatus: 'pending_payment', toStatus: 'cancelled' } });
+  });
 
   describe('create()', () => {
     it('saves copies of the service, price and address, and ends after the service duration', async () => {

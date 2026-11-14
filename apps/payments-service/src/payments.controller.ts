@@ -33,6 +33,13 @@ export class PaymentsController {
     return this.payouts.onboarding(id);
   }
 
+  @Post('payout-accounts/:id/scrub')
+  @HttpCode(200)
+  scrubPayoutAccount(@Param('id', ParseUUIDPipe) id: string, @Headers('x-internal-token') token?: string) {
+    this.requireInternalToken(token);
+    return this.payouts.eraseLocalLink(id);
+  }
+
   private requireInternalToken(token?: string) {
     const expected = Buffer.from(process.env.INTERNAL_SERVICE_TOKEN ?? '');
     const given = Buffer.from(token ?? '');

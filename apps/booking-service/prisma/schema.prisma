@@ -62,13 +62,88 @@ model Booking {
 
   events BookingEvent[]
   payment BookingReceipt?
+  invoice BookingInvoice?
+  emails BookingEmail[]
+  pushEvents ProcessedPushEvent[]
   offers BookingOffer[]
+  dispute BookingDispute?
 
   @@index([customerId, scheduledStart])
   @@index([professionalId, scheduledStart])
   @@index([status])
   @@index([status, releaseAt])
   @@map("bookings")
+}
+
+model BookingInvoice {
+  bookingId String @id @map("booking_id") @db.Uuid
+  billingName String @map("billing_name")
+  nif String?
+  issuedAt DateTime? @map("issued_at")
+  reference String?
+  issuedBy String? @map("issued_by")
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("booking_invoices")
+}
+
+enum DisputeResolution {
+  refund
+  pay_professional
+}
+
+model BookingDispute {
+  bookingId  String             @id @map("booking_id") @db.Uuid
+  evidence   String
+  openedAt   DateTime           @default(now()) @map("opened_at")
+  resolution DisputeResolution?
+  resolvedAt DateTime?          @map("resolved_at")
+  resolvedBy String?            @map("resolved_by")
+  booking    Booking            @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([resolution, openedAt])
+  @@map("booking_disputes")
+}
+
+model PushDevice {
+  token String @id
+  userId String @map("user_id") @db.Uuid
+  professionalId String? @map("professional_id") @db.Uuid
+  events ProcessedPushEvent[]
+
+  @@index([userId], map: "push_devices_user")
+  @@index([professionalId], map: "push_devices_professional")
+  @@map("push_devices")
+}
+
+model ProcessedPushEvent {
+  id BigInt @id @default(autoincrement())
+  bookingId String @map("booking_id") @db.Uuid
+  token String
+  userId String @map("user_id") @db.Uuid
+  kind String
+  eventKey String @map("event_key")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  leaseUntil DateTime? @map("lease_until") @db.Timestamptz(6)
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(6)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  device PushDevice @relation(fields: [token], references: [token], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([eventKey, token])
+  @@map("processed_push_events")
+}
+
+model BookingEmail {
+  bookingId String @map("booking_id") @db.Uuid
+  kind String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  attemptedAt DateTime? @map("attempted_at") @db.Timestamptz(6)
+  sentAt DateTime? @map("sent_at") @db.Timestamptz(6)
+  envelope Json?
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([bookingId, kind])
+  @@map("booking_emails")
 }
 
 model Coupon {

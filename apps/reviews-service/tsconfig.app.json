@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "composite": true, "rootDir": "./src", "outDir": "../../dist/apps/reviews-service" },
+  "include": ["src/**/*"],
+  "exclude": ["**/*.spec.ts"]
+}

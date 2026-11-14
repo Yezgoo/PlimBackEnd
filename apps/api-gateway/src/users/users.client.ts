@@ -11,7 +11,7 @@ export type UserProfile = {
   updatedAt: string;
 };
 
-export type RegisterUserInput = { email: string; name?: string; phone?: string };
+export type RegisterUserInput = { email: string; name?: string; phone?: string; privacyVersion?: string };
 export type UpdateUserInput = { name?: string; phone?: string };
 
 export type ProfessionalProfile = {

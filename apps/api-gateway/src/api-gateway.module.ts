@@ -4,6 +4,7 @@ import { AdminModule } from './admin/admin.module.js';
 import { ApiGatewayController } from './api-gateway.controller.js';
 import { ApiGatewayService } from './api-gateway.service.js';
 import { AuthGuard } from './auth/auth.guard.js';
+import { AccountFreezeGuard } from './auth/account-freeze.guard.js';
 import { PermissionsGuard } from './auth/permissions.guard.js';
 import { BookingsModule } from './bookings/bookings.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
@@ -18,6 +19,7 @@ import { UsersModule } from './users/users.module.js';
     // Global guards run in this order on every route of the gateway:
     { provide: APP_GUARD, useClass: AuthGuard },        // 1. who is calling? (verifies the Auth0 token)
     { provide: APP_GUARD, useClass: PermissionsGuard }, // 2. may they do this? (permissions, /admin)
+    { provide: APP_GUARD, useClass: AccountFreezeGuard },
   ],
 })
 export class ApiGatewayModule {}

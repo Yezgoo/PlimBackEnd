@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, Param, Post, UnprocessableEntityException, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, UnprocessableEntityException, UseGuards } from '@nestjs/common';
+import { callInternalService } from '../internal/internal-http.js';
 import type { JWTPayload } from 'jose';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { HumanCallerGuard } from '../auth/human-caller.guard.js';
@@ -69,9 +70,30 @@ export class BookingsController {
     return this.bookings.confirmForCustomer(id, await this.customerId(user));
   }
 
+  @Post(':id/dispute')
+  @HttpCode(200)
+  async dispute(@CurrentUser() user: JWTPayload, @Param('id') id: string, @Body('evidence') evidence: unknown) {
+    return this.bookings.openDispute(id, await this.customerId(user), evidence);
+  }
+
   // 404 here means the person has no Plim profile yet (the app sends them to "complete profile")
   private async customerId(user: JWTPayload) {
     return (await this.users.findByAuth0Id(user.sub!)).id;
+  }
+
+  @Get(':id/invoice')
+  async invoice(@CurrentUser() user: JWTPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return this.invoiceRequest(id, await this.customerId(user));
+  }
+
+  @Patch(':id/invoice')
+  async saveInvoice(@CurrentUser() user: JWTPayload, @Param('id', ParseUUIDPipe) id: string, @Body() body: unknown) {
+    return this.invoiceRequest(id, await this.customerId(user), { method: 'PATCH', body: JSON.stringify(body ?? {}) });
+  }
+
+  private invoiceRequest(id: string, customerId: string, init?: RequestInit) {
+    return callInternalService('booking-service', process.env.BOOKING_SERVICE_URL ?? 'http://localhost:3003',
+      `/invoices/${id}?customerId=${encodeURIComponent(customerId)}`, init);
   }
 
   // Turns "this service, here, then" into a full booking request, using only trusted sources for

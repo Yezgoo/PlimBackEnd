@@ -23,6 +23,8 @@
     "start:gateway": "nest start api-gateway --watch",
     "start:admin": "nest start admin-service --watch",
     "start:payments": "nest start payments-service --watch",
+    "start:reviews": "nest start reviews-service --watch",
+    "db:reviews:deploy": "node apps/reviews-service/migrations/deploy.mjs",
     "start:users": "nest start users-service --watch",
     "start:bookings": "nest start booking-service --watch",
     "start:catalog": "nest start catalog-service --watch",

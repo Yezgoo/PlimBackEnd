@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectVersionsCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 
@@ -61,5 +61,22 @@ export class StorageService {
 
   async remove(key: string): Promise<void> {
     await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+  }
+
+  async eraseProfessionalDocuments(professionalId: string) {
+    const prefix = `pro-documents/${professionalId}/`;
+    for (let pageNumber = 0; pageNumber < 100; pageNumber++) {
+      const page = await this.s3.send(new ListObjectVersionsCommand({ Bucket: this.bucket, Prefix: prefix, MaxKeys: 100 }));
+      const entries = [...(page.Versions ?? []), ...(page.DeleteMarkers ?? [])];
+      if (!entries.length) {
+        if (page.IsTruncated) throw new ServiceUnavailableException('Document version listing could not be completed');
+        return;
+      }
+      for (const { Key, VersionId } of entries) {
+        if (!Key?.startsWith(prefix) || !VersionId) throw new ServiceUnavailableException('Document version could not be verified');
+        await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key, VersionId }));
+      }
+    }
+    throw new ServiceUnavailableException('Document cleanup is incomplete; retry to continue');
   }
 }

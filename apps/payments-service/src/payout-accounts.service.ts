@@ -34,6 +34,11 @@ export class PayoutAccountsService implements OnModuleDestroy {
     };
   }
 
+  async eraseLocalLink(professionalId: string) {
+    const result = await this.db().query('DELETE FROM payout_accounts WHERE professional_id = $1', [professionalId]);
+    return { removed: Boolean(result.rowCount) };
+  }
+
   async onboarding(professionalId: string) {
     const returnUrl = this.destination('returned');
     const refreshUrl = this.destination('refresh');

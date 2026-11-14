@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProfessionalNotifier } from '../professionals/professional.notifier.js';
 import { WelcomeNotifier } from '../welcome/welcome.notifier.js';
 import { EventsConsumer } from './events.consumer.js';
@@ -12,12 +12,14 @@ describe('EventsConsumer', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => Response.json({ recipient: { email: 'a@b.com', name: 'Ana' } })));
     // creating the class doesn't connect to Kafka; that only happens in onApplicationBootstrap()
     consumer = new EventsConsumer(
       welcomeMock as unknown as WelcomeNotifier,
       professionalsMock as unknown as ProfessionalNotifier,
     );
   });
+  afterEach(() => vi.unstubAllGlobals());
 
   it('passes user.registered to WelcomeNotifier', async () => {
     const registered = event('user.registered', { userId: 'uuid-1', email: 'a@b.com', name: 'Ana' });
@@ -29,8 +31,8 @@ describe('EventsConsumer', () => {
   });
 
   it('passes professional.approved and professional.rejected to ProfessionalNotifier', async () => {
-    const approved = event('professional.approved', { professionalId: 'p1', email: 'a@b.com', name: 'Ana' });
-    const rejected = event('professional.rejected', { professionalId: 'p1', email: 'a@b.com', name: 'Ana', reason: 'Seguro caducado' });
+    const approved = event('professional.approved', { userId: 'uuid-1', professionalId: 'p1', email: 'a@b.com', name: 'Ana' });
+    const rejected = event('professional.rejected', { userId: 'uuid-1', professionalId: 'p1', email: 'a@b.com', name: 'Ana', reason: 'Seguro caducado' });
 
     await consumer.handle(JSON.stringify(approved));
     await consumer.handle(JSON.stringify(rejected));
@@ -52,6 +54,12 @@ describe('EventsConsumer', () => {
   it('keeps going when handling an event fails', async () => {
     welcomeMock.onUserRegistered.mockRejectedValueOnce(new Error('email provider down'));
 
-    await expect(consumer.handle(JSON.stringify(event('user.registered', {})))).resolves.toBeUndefined();
+    await expect(consumer.handle(JSON.stringify(event('user.registered', { userId: 'uuid-1' })))).resolves.toBeUndefined();
+  });
+
+  it('skips old events for accounts that are frozen or deleted', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ recipient: null }));
+    await consumer.handle(JSON.stringify(event('user.registered', { userId: 'uuid-1', email: 'old@example.test' })));
+    expect(welcomeMock.onUserRegistered).not.toHaveBeenCalled();
   });
 });

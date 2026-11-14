@@ -26,6 +26,7 @@ describe('EligibilityService', () => {
 
     expect(prismaMock.professional.findMany.mock.calls[0][0].where).toEqual({
       status: 'approved',
+      user: { OR: [{ deletionRequest: null }, { deletionRequest: { frozenAt: null } }] },
       services: { some: { serviceTypeId: 'svc-1' } },
       areas: { some: { municipalityCode: '0603' } },
       slots: { some: { weekday: 3, startMinute: { lte: 900 }, endMinute: { gte: 960 } } },

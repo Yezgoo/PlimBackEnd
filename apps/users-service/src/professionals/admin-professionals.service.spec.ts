@@ -87,7 +87,7 @@ describe('AdminProfessionalsService', () => {
         key: 'pro-1',
         payload: {
           type: 'professional.approved',
-          data: { professionalId: 'pro-1', userId: 'user-1', auth0Id: 'auth0|pro', email: 'ana@example.com', name: 'Ana' },
+          data: { professionalId: 'pro-1', userId: 'user-1' },
         },
       });
       expect(outboxMock.flush).toHaveBeenCalled();
@@ -128,7 +128,7 @@ describe('AdminProfessionalsService', () => {
       expect(update.args.data).toMatchObject({ status: 'rejected', verifiedAt: null, rejectionReason: 'Seguro caducado' });
       expect(outbox.args.data).toMatchObject({
         topic: 'professional.rejected',
-        payload: { type: 'professional.rejected', data: { reason: 'Seguro caducado', email: 'ana@example.com' } },
+        payload: { type: 'professional.rejected', data: { professionalId: 'pro-1', userId: 'user-1' } },
       });
     });
 

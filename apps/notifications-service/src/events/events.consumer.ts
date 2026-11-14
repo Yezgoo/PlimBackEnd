@@ -3,6 +3,7 @@ import { Consumer, stringDeserializers, type MessagesStream } from '@platformati
 import { ProfessionalNotifier } from '../professionals/professional.notifier.js';
 import { WelcomeNotifier } from '../welcome/welcome.notifier.js';
 import { SUBSCRIBED_TOPICS, type IncomingEvent } from './incoming-events.js';
+import { notificationRecipient } from '../notification-recipient.js';
 
 // Reads the events this service cares about and hands each one to the right notifier.
 @Injectable()
@@ -60,11 +61,16 @@ export class EventsConsumer implements OnApplicationBootstrap, OnModuleDestroy {
       event = JSON.parse(raw);
     } catch {
       // a broken message would otherwise block us forever: log it and move on
-      this.logger.warn(`Skipping a message that is not valid JSON: ${raw.slice(0, 100)}`);
+      this.logger.warn('Skipping a message that is not valid JSON');
       return;
     }
 
     try {
+      if (event?.type === 'user.registered' || event?.type === 'professional.approved' || event?.type === 'professional.rejected') {
+        if (!event.data?.userId) return;
+        const recipient = await notificationRecipient(event.data.userId);
+        if (!recipient) return;
+      }
       switch (event.type) {
         case 'user.registered':
           return await this.welcome.onUserRegistered(event);

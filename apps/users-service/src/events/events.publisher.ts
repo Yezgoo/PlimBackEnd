@@ -1,10 +1,10 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Admin, Producer, stringSerializers } from '@platformatic/kafka';
 import { PROFESSIONAL_APPROVED_TOPIC, PROFESSIONAL_REJECTED_TOPIC } from './professional-events.js';
-import { USER_REGISTERED_TOPIC } from './user-events.js';
+import { USER_DELETED_TOPIC, USER_REGISTERED_TOPIC } from './user-events.js';
 
 // Every topic users-service publishes to. Add new ones here so they get created.
-const OWNED_TOPICS = [USER_REGISTERED_TOPIC, PROFESSIONAL_APPROVED_TOPIC, PROFESSIONAL_REJECTED_TOPIC];
+const OWNED_TOPICS = [USER_REGISTERED_TOPIC, USER_DELETED_TOPIC, PROFESSIONAL_APPROVED_TOPIC, PROFESSIONAL_REJECTED_TOPIC];
 
 // Sends events to Kafka. Only OutboxRelay calls publish(); the rest of users-service writes to the outbox.
 @Injectable()

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import type { JWTPayload } from 'jose';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { HumanCallerGuard } from '../auth/human-caller.guard.js';
@@ -17,6 +17,7 @@ export class MeController {
 
   @Post()                                     // POST /me → register my profile
   register(@CurrentUser() user: JWTPayload, @Body() input: RegisterUserInput) {
+    if (input?.privacyVersion !== '2026-11-v1') throw new BadRequestException('Confirma a informação de privacidade para continuar.');
     return this.usersClient.create(user.sub!, input);
   }
 

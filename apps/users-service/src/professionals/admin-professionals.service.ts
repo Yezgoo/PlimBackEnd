@@ -108,7 +108,7 @@ export class AdminProfessionalsService {
       eventId: randomUUID(),
       type: 'professional.rejected',
       occurredAt: new Date().toISOString(),
-      data: { ...this.eventData(professional), reason },
+      data: this.eventData(professional),
     };
     await this.prisma.$transaction([
       this.prisma.professional.update({
@@ -138,8 +138,7 @@ export class AdminProfessionalsService {
   }
 
   private eventData(professional: ProfessionalWithRelations) {
-    const { user } = professional;
-    return { professionalId: professional.id, userId: user.id, auth0Id: user.auth0Id, email: user.email, name: user.name };
+    return { professionalId: professional.id, userId: professional.userId };
   }
 
   // Plain values for JSON, and never the storage path of a document

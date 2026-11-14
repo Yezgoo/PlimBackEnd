@@ -109,7 +109,10 @@ export class BookingsService {
     const commissionCents = Math.floor((priceCents * commissionBps + 5_000) / 10_000);
 
     // a double tap on "Marcar" must not create two bookings
-    const duplicate = await this.prisma.booking.findFirst({
+    const booking = await this.prisma.$transaction(async tx => {
+    // Serialize customer inserts with the same lock used by the coupon trigger.
+    await tx.$queryRaw`SELECT true AS locked FROM pg_advisory_xact_lock(hashtextextended(${dto.customerId}::text, 1206))`;
+    const duplicate = await tx.booking.findFirst({
       where: {
         customerId: dto.customerId,
         serviceTypeId: dto.service.id,
@@ -118,9 +121,9 @@ export class BookingsService {
       },
       select: { id: true },
     });
-    if (duplicate) throw new ConflictException('You already have this service booked for that time');
+    if (duplicate) throw new ConflictException({ code: 'BOOKING_EXISTS', message: 'You already have this service booked for that time', bookingId: duplicate.id });
 
-    const booking = await this.prisma.booking.create({
+    return tx.booking.create({
       data: {
         customerId: dto.customerId,
         serviceTypeId: dto.service.id,
@@ -149,6 +152,8 @@ export class BookingsService {
         throw new ConflictException({ code: 'COUPON_FIRST_BOOKING', message: 'Coupon requires a first booking' });
       }
       throw error;
+    });
+
     });
 
     // Until payments exist (roadmap step 12), a new booking goes straight to finding a professional.
@@ -200,6 +205,20 @@ export class BookingsService {
     });
     if (dispatch) await this.offers.offerNextSafely(id);
     return { received: true };
+  }
+
+  async expireUnpaid() {
+    if (process.env.PAYMENTS_REQUIRED !== 'true') return;
+    const now = new Date();
+    const due = await this.prisma.booking.findMany({
+      where: { status: 'pending_payment', OR: [{ createdAt: { lte: new Date(now.getTime() - 23 * 60 * 60_000) } }, { scheduledStart: { lte: now } }] },
+      select: { id: true }, take: 100,
+    });
+    for (const { id } of due) await this.prisma.$transaction(async tx => {
+      const result = await tx.booking.updateMany({ where: { id, status: 'pending_payment' },
+        data: { status: 'cancelled', cancelReason: 'payment_expired', cancelledAt: now, cancellationFeeCents: 0 } });
+      if (result.count) await tx.bookingEvent.create({ data: { bookingId: id, fromStatus: 'pending_payment', toStatus: 'cancelled' } });
+    });
   }
 
   async pendingSettlements() {

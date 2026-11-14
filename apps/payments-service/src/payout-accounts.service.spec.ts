@@ -20,6 +20,17 @@ describe('Stripe Connect payout accounts', () => {
     vi.stubEnv('CONNECT_RETURN_URL', 'https://app.example/bookings');
   });
 
+  it('removes only the local payout link and can be retried', async () => {
+    mocks.query.mockResolvedValueOnce({ rowCount: 1 }).mockResolvedValueOnce({ rowCount: 0 });
+    const service = new PayoutAccountsService();
+    await expect(service.eraseLocalLink(professional)).resolves.toEqual({ removed: true });
+    await expect(service.eraseLocalLink(professional)).resolves.toEqual({ removed: false });
+    expect(mocks.query.mock.calls).toEqual(Array.from({ length: 2 }, () => [
+      'DELETE FROM payout_accounts WHERE professional_id = $1', [professional],
+    ]));
+    expect(mocks.retrieve).not.toHaveBeenCalled();
+  });
+
   it('persists the connected account and uses it for subsequent links', async () => {
     mocks.query.mockResolvedValueOnce({}).mockResolvedValueOnce({ rows: [{ stripe_account_id: null, created_at: new Date() }] })
       .mockResolvedValueOnce({}).mockResolvedValueOnce({}).mockResolvedValueOnce({ rows: [{ stripe_account_id: account }] });

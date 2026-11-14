@@ -20,6 +20,7 @@ export class EligibilityService {
     const professionals = await this.prisma.professional.findMany({
       where: {
         status: 'approved',
+        user: { OR: [{ deletionRequest: null }, { deletionRequest: { frozenAt: null } }] },
         services: { some: { serviceTypeId: job.serviceTypeId } },
         areas: { some: { municipalityCode: job.municipalityCode } },
         // one block of the timetable must cover the whole job

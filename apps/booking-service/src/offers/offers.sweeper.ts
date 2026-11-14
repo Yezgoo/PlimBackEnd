@@ -29,6 +29,7 @@ export class OffersSweeper implements OnModuleInit, OnModuleDestroy {
     if (this.running) return; // the previous round is still going
     this.running = true;
     try {
+      await this.bookings.expireUnpaid();
       await this.offers.expireDue();
       await this.offers.retryStalled();
       await this.bookings.autoConfirmDue();

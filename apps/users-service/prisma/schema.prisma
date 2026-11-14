@@ -17,8 +17,42 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   professional Professional?
+  consents UserConsent[]
+  deletionRequest AccountDeletionRequest?
 
   @@map("users")
+}
+
+model UserConsent {
+  userId String @map("user_id") @db.Uuid
+  version String
+  acceptedAt DateTime @default(now()) @map("accepted_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, version])
+  @@map("user_consents")
+}
+
+model AccountDeletionRequest {
+  userId String @id @map("user_id") @db.Uuid
+  requestedAt DateTime @default(now()) @map("requested_at")
+  processingAt DateTime? @map("processing_at")
+  processingBy String? @map("processing_by")
+  frozenAt DateTime? @map("frozen_at")
+  bookingsCleanedAt DateTime? @map("bookings_cleaned_at")
+  reviewsCleanedAt DateTime? @map("reviews_cleaned_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("account_deletion_requests")
+}
+
+model AccountDeletionReceipt {
+  userId String @id @map("user_id") @db.Uuid
+  subjectHash String? @unique @map("subject_hash")
+  completedAt DateTime @default(now()) @map("completed_at")
+  completedBy String @map("completed_by")
+
+  @@map("account_deletion_receipts")
 }
 
 enum ProfessionalStatus {
@@ -54,8 +88,19 @@ model Professional {
   services  ProService[]
   slots     AvailabilitySlot[]
   timeOff   TimeOff[]
+  reviewRatings ReviewRating[]
 
   @@map("professionals")
+}
+
+model ReviewRating {
+  bookingId      String       @id @map("booking_id") @db.Uuid
+  professionalId String       @map("professional_id") @db.Uuid
+  rating         Int
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([professionalId], map: "review_ratings_professional")
+  @@map("review_ratings")
 }
 
 enum ProDocumentType {

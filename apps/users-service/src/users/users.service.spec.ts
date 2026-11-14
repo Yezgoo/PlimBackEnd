@@ -65,7 +65,7 @@ describe('UsersService', () => {
       key: 'uuid-1',
       payload: {
         type: 'user.registered',
-        data: { userId: 'uuid-1', auth0Id: 'auth0|1', email: 'a@b.com', name: 'Ana' },
+        data: { userId: 'uuid-1' },
       },
     });
     expect(saved.id).toBe(saved.payload.eventId); // outbox row id = event id, so consumers can dedupe

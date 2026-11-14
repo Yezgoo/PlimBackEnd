@@ -16,4 +16,9 @@ export class CreateUserDto {
   @IsOptional()
   @IsPhoneNumber()   // international format, e.g. +351912345678
   phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  privacyVersion?: string;
 }

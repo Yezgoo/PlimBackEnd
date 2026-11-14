@@ -47,6 +47,28 @@ describe('api-gateway (e2e)', () => {
     return request(app.getHttpServer()).patch('/admin/settings/commission_default').send({ value: 2100 }).expect(401);
   });
 
+  it('protects the admin booking list and coupon writes', async () => {
+    await request(app.getHttpServer()).get('/admin/bookings').expect(401);
+    await request(app.getHttpServer()).post('/admin/coupons').send({ code: 'WELCOME5', fixedCents: 500 }).expect(401);
+    await request(app.getHttpServer()).patch('/admin/coupons/WELCOME5').send({ active: false }).expect(401);
+  });
+
+  it('requires authentication for marketplace metrics', () => {
+    return request(app.getHttpServer()).get('/admin/metrics?days=7').expect(401);
+  });
+
+  it('protects privacy exports, deletion requests, and the deletion queue', async () => {
+    await request(app.getHttpServer()).get('/me/privacy/export').expect(401);
+    await request(app.getHttpServer()).get('/me/privacy/deletion').expect(401);
+    await request(app.getHttpServer()).post('/me/privacy/deletion').send({ confirm: true }).expect(401);
+    await request(app.getHttpServer()).get('/admin/privacy/deletions').expect(401);
+    await request(app.getHttpServer()).post('/admin/privacy/deletions/11111111-1111-4111-8111-111111111111/cleanup')
+      .send({ confirm: true }).expect(401);
+    await request(app.getHttpServer()).get('/admin/privacy/deletions/11111111-1111-4111-8111-111111111111/check').expect(401);
+    await request(app.getHttpServer()).post('/admin/privacy/deletions/11111111-1111-4111-8111-111111111111/start')
+      .send({ admin: 'forged' }).expect(401);
+  });
+
   it('a route nobody marked @Public() is protected by default', () => {
     return request(app.getHttpServer()).get('/').expect(401);
   });

@@ -8,7 +8,6 @@ export class WelcomeNotifier {
   private readonly logger = new Logger(WelcomeNotifier.name);
 
   async onUserRegistered(event: UserRegisteredEvent) {
-    const { email, name } = event.data;
-    this.logger.log(`Would send a welcome email to ${email} (${name ?? 'no name'})`);
+    this.logger.log(`Welcome notification eligible for event ${event.eventId}`);
   }
 }
