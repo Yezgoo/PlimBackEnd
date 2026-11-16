@@ -1,4 +1,4 @@
-import { Body, Controller, Get, NotFoundException, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
 import { UsersService } from './users.service.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
@@ -27,6 +27,21 @@ export class UsersController {
   @Patch('by-auth0/:auth0Id')                 // PATCH /users/by-auth0/<auth0 id> → change name or phone
   update(@Param('auth0Id') auth0Id: string, @Body() dto: UpdateUserDto) {
     return this.usersService.updateByAuth0Id(auth0Id, dto);
+  }
+
+  @Get('by-auth0/:auth0Id/favorites')
+  listFavorites(@Param('auth0Id') auth0Id: string) {
+    return this.usersService.listFavorites(auth0Id);
+  }
+
+  @Put('by-auth0/:auth0Id/favorites/:serviceSlug')
+  addFavorite(@Param('auth0Id') auth0Id: string, @Param('serviceSlug') serviceSlug: string) {
+    return this.usersService.addFavorite(auth0Id, serviceSlug);
+  }
+
+  @Delete('by-auth0/:auth0Id/favorites/:serviceSlug')
+  removeFavorite(@Param('auth0Id') auth0Id: string, @Param('serviceSlug') serviceSlug: string) {
+    return this.usersService.removeFavorite(auth0Id, serviceSlug);
   }
 
   @Get(':id')                                 // GET /users/<uuid>

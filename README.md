@@ -106,6 +106,9 @@ come from the booking service environment.
 | GET | `/me` | logged-in person | Caller's profile, 404 if not registered yet |
 | POST | `/me` | logged-in person | Register the caller's profile (`email`, `name?`, `phone?`) |
 | PATCH | `/me` | logged-in person | Change `name` / `phone` |
+| GET | `/me/favorites` | logged-in person | Service slugs saved by this account |
+| PUT | `/me/favorites/:serviceSlug` | logged-in person | Save an active catalog service to this account's favorites |
+| DELETE | `/me/favorites/:serviceSlug` | logged-in person | Remove a service from this account's favorites |
 | GET | `/me/professional` | logged-in person | Caller's professional profile, 404 if they never applied |
 | POST | `/me/professional` | logged-in person | Apply as a professional (`nif`, `activityRegistered: true`, optional `businessName`, `bio`, `insurancePolicy`, `insuranceValidUntil`); starts as `applied` |
 | PATCH | `/me/professional` | logged-in person | Edit the professional profile (the NIF only while `applied`) |

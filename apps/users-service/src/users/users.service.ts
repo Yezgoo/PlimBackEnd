@@ -52,6 +52,32 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { auth0Id } });
   }
 
+  async listFavorites(auth0Id: string) {
+    const userId = await this.favoriteOwnerId(auth0Id);
+    const rows = await this.prisma.userFavorite.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      select: { serviceSlug: true },
+    });
+    return { favorites: rows.map(({ serviceSlug }) => serviceSlug) };
+  }
+
+  async addFavorite(auth0Id: string, serviceSlug: string) {
+    const userId = await this.favoriteOwnerId(auth0Id);
+    await this.prisma.userFavorite.upsert({
+      where: { userId_serviceSlug: { userId, serviceSlug } },
+      create: { userId, serviceSlug },
+      update: {},
+    });
+    return this.listFavorites(auth0Id);
+  }
+
+  async removeFavorite(auth0Id: string, serviceSlug: string) {
+    const userId = await this.favoriteOwnerId(auth0Id);
+    await this.prisma.userFavorite.deleteMany({ where: { userId, serviceSlug } });
+    return this.listFavorites(auth0Id);
+  }
+
   async updateByAuth0Id(auth0Id: string, data: UpdateUserDto) {
     try {
       return await this.prisma.user.update({ where: { auth0Id }, data });
@@ -71,5 +97,11 @@ export class UsersService {
       occurredAt: new Date().toISOString(),
       data: { userId: user.id },
     };
+  }
+
+  private async favoriteOwnerId(auth0Id: string) {
+    const user = await this.prisma.user.findUnique({ where: { auth0Id }, select: { id: true } });
+    if (!user) throw new NotFoundException(`No user linked to ${auth0Id}`);
+    return user.id;
   }
 }

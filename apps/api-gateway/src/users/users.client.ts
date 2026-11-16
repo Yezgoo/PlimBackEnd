@@ -97,6 +97,18 @@ export class UsersClient {
     return this.request(this.userPath(auth0Id), { method: 'PATCH', body: JSON.stringify(input) });
   }
 
+  listFavorites(auth0Id: string): Promise<{ favorites: string[] }> {
+    return this.request(`${this.userPath(auth0Id)}/favorites`);
+  }
+
+  addFavorite(auth0Id: string, serviceSlug: string): Promise<{ favorites: string[] }> {
+    return this.request(`${this.userPath(auth0Id)}/favorites/${encodeURIComponent(serviceSlug)}`, { method: 'PUT' });
+  }
+
+  removeFavorite(auth0Id: string, serviceSlug: string): Promise<{ favorites: string[] }> {
+    return this.request(`${this.userPath(auth0Id)}/favorites/${encodeURIComponent(serviceSlug)}`, { method: 'DELETE' });
+  }
+
   findProfessional(auth0Id: string): Promise<ProfessionalProfile> {
     return this.request(`${this.userPath(auth0Id)}/professional`);
   }

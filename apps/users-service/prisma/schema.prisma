@@ -19,6 +19,7 @@ model User {
   professional Professional?
   consents UserConsent[]
   deletionRequest AccountDeletionRequest?
+  favorites UserFavorite[]
 
   @@map("users")
 }
@@ -31,6 +32,17 @@ model UserConsent {
 
   @@id([userId, version])
   @@map("user_consents")
+}
+
+model UserFavorite {
+  userId      String   @map("user_id") @db.Uuid
+  serviceSlug String   @map("service_slug")
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, serviceSlug])
+  @@index([userId, createdAt])
+  @@map("user_favorites")
 }
 
 model AccountDeletionRequest {
