@@ -60,3 +60,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 #generated code
 apps/*/src/generated/
+
+# staging secrets (server environment)
+.env.staging

@@ -1,0 +1,94 @@
+name: plim-staging
+
+# Shared settings for every service (YAML "anchor", reused below with <<: *service)
+x-service: &service
+  build:
+    context: ..
+    dockerfile: Dockerfile
+  image: plim-backend:latest
+  env_file: ../.env.staging
+  restart: unless-stopped
+  environment:
+    # inside Docker, services find each other by service name, not localhost
+    KAFKA_BROKERS: kafka:9092
+    USERS_SERVICE_URL: http://users-service:3001
+    CATALOG_SERVICE_URL: http://catalog-service:3002
+    BOOKING_SERVICE_URL: http://booking-service:3003
+    ADMIN_SERVICE_URL: http://admin-service:3004
+    PAYMENTS_SERVICE_URL: http://payments-service:3005
+    REVIEWS_SERVICE_URL: http://reviews-service:3006
+  depends_on:
+    kafka:
+      condition: service_healthy
+
+services:
+  api-gateway:
+    <<: *service
+    command: ["node", "dist/apps/api-gateway/main.js"]
+    ports:
+      - "3000:3000"   # for local testing only; on the server, Caddy will be the only way in
+
+  users-service:
+    <<: *service
+    command: ["node", "dist/apps/users-service/main.js"]
+  catalog-service:
+    <<: *service
+    command: ["node", "dist/apps/catalog-service/main.js"]
+  booking-service:
+    <<: *service
+    command: ["node", "dist/apps/booking-service/main.js"]
+  admin-service:
+    <<: *service
+    command: ["node", "dist/apps/admin-service/main.js"]
+  payments-service:
+    <<: *service
+    command: ["node", "dist/apps/payments-service/main.js"]
+  reviews-service:
+    <<: *service
+    command: ["node", "dist/apps/reviews-service/main.js"]
+  notifications-service:
+    <<: *service
+    command: ["node", "dist/apps/notifications-service/main.js"]
+
+  kafka:
+    image: apache/kafka:4.1.0
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092   # other containers reach it as "kafka"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms512m"   # keep Kafka's memory in check on a small server
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    # no "ports": Kafka is reachable only inside Docker, never from the internet
+
+  # One-off tool: applies every service's database migrations. Not started by "up";
+  # run it with: docker compose -f infra/docker-compose.staging.yml run --rm migrate
+  migrate:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: build          # the build stage has the Prisma CLI and the migration files
+    env_file: ../.env.staging
+    profiles: ["tools"]
+    command: >
+      sh -c "npm run db:users:deploy && npm run db:catalog:deploy && npm run db:bookings:deploy &&
+             npm run db:admin:deploy && npm run db:payments:deploy && npm run db:reviews:deploy"
+
+volumes:
+  kafka-data:
