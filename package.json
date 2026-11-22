@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
-    "build": "nest build",
+    "build": "nest build api-gateway && nest build users-service && nest build catalog-service && nest build booking-service && nest build admin-service && nest build payments-service && nest build reviews-service && nest build notifications-service",
     "deploy": "nest deploy",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\"",
     "start": "nest start",
