@@ -80,12 +80,14 @@ export class PrivacyController {
       include: {
         consents: { orderBy: { acceptedAt: 'asc' } },
         deletionRequest: { select: { requestedAt: true, processingAt: true } },
+        favorites: { select: { serviceSlug: true, createdAt: true }, orderBy: { createdAt: 'asc' } },
+        addresses: { omit: { userId: true }, orderBy: { createdAt: 'asc' } },
         professional: {
           include: {
             areas: true, services: true, slots: true, timeOff: true,
             documents: { omit: { fileKey: true, reviewedBy: true } },
           },
-          omit: { reviewedBy: true },
+          omit: { reviewedBy: true, photoKey: true, photoUploadKey: true },
         },
       },
     });

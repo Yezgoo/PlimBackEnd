@@ -8,8 +8,8 @@ import { BookingsController, type BookingInput } from './bookings.controller.js'
 import { PricingSettingsClient } from './pricing-settings.client.js';
 
 describe('BookingsController', () => {
-  const bookingsMock = { preview: vi.fn(), create: vi.fn(), listForCustomer: vi.fn(), findForCustomer: vi.fn(), confirmForCustomer: vi.fn(), cancelForCustomer: vi.fn(), reportNoShow: vi.fn() };
-  const usersMock = { findByAuth0Id: vi.fn() };
+  const bookingsMock = { preview: vi.fn(), create: vi.fn(), listForCustomer: vi.fn(), findForCustomer: vi.fn(), confirmForCustomer: vi.fn(), cancelForCustomer: vi.fn(), reportNoShow: vi.fn(), completedJobs: vi.fn() };
+  const usersMock = { findByAuth0Id: vi.fn(), publicProfessional: vi.fn() };
   const catalogMock = { findBookingTerms: vi.fn(), findArea: vi.fn() };
   const pricingMock = { read: vi.fn() };
   const me = { sub: 'auth0|me' } as JWTPayload;
@@ -160,5 +160,32 @@ describe('BookingsController', () => {
 
     expect(bookingsMock.cancelForCustomer).toHaveBeenCalledWith('booking-9', 'user-1');
     expect(bookingsMock.reportNoShow).toHaveBeenCalledWith('booking-9', 'user-1');
+  });
+  describe('who is coming', () => {
+    const card = { id: 'pro-1', name: 'Ana M.', bio: null, photoUrl: null, verified: true, ratingAvg: 4.8, ratingCount: 12, memberSince: '2026-10' };
+
+    it('shows the assigned professional to the customer who booked, with their finished jobs', async () => {
+      bookingsMock.findForCustomer.mockResolvedValue({ id: 'b-1', professionalId: 'pro-1', status: 'en_route' });
+      usersMock.publicProfessional.mockResolvedValue(card);
+      bookingsMock.completedJobs.mockResolvedValue({ completedJobs: 31 });
+
+      await expect(controller.assignedProfessional(me, 'b-1')).resolves.toEqual({ professional: { ...card, completedJobs: 31 } });
+      expect(bookingsMock.findForCustomer).toHaveBeenCalledWith('b-1', 'user-1');
+      expect(usersMock.publicProfessional).toHaveBeenCalledWith('pro-1');
+    });
+
+    it.each(['finding_pro', 'cancelled', 'pending_payment'])('shows nobody while the booking is %s', async (status) => {
+      bookingsMock.findForCustomer.mockResolvedValue({ id: 'b-1', professionalId: 'pro-1', status });
+
+      await expect(controller.assignedProfessional(me, 'b-1')).resolves.toEqual({ professional: null });
+      expect(usersMock.publicProfessional).not.toHaveBeenCalled();
+    });
+
+    it("never looks a professional up for someone else's booking", async () => {
+      bookingsMock.findForCustomer.mockRejectedValue(new NotFoundException('Booking b-1 not found'));
+
+      await expect(controller.assignedProfessional(me, 'b-1')).rejects.toBeInstanceOf(NotFoundException);
+      expect(usersMock.publicProfessional).not.toHaveBeenCalled();
+    });
   });
 });

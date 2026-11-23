@@ -13,10 +13,12 @@ import { ProfessionalsService } from './professionals.service.js';
 import { WorkSettingsController } from './work-settings.controller.js';
 import { WorkSettingsService } from './work-settings.service.js';
 import { ReviewRatingsController } from './review-ratings.controller.js';
+import { PhotoController, PublicProfessionalsController } from './photo.controller.js';
+import { PhotoService } from './photo.service.js';
 
 @Module({
   imports: [DatabaseModule, StorageModule, EventsModule],
-  controllers: [ProfessionalsController, DocumentsController, WorkSettingsController, AdminProfessionalsController, EligibilityController, ReviewRatingsController],
-  providers: [ProfessionalsService, DocumentsService, WorkSettingsService, AdminProfessionalsService, EligibilityService],
+  controllers: [ProfessionalsController, DocumentsController, WorkSettingsController, AdminProfessionalsController, EligibilityController, ReviewRatingsController, PhotoController, PublicProfessionalsController],
+  providers: [ProfessionalsService, DocumentsService, WorkSettingsService, AdminProfessionalsService, EligibilityService, PhotoService],
 })
 export class ProfessionalsModule {}

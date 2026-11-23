@@ -32,6 +32,11 @@ export class MeOffersController {
     return this.bookings.declineOffer(id, await this.professionalId(user));
   }
 
+  @Get('earnings')                            // GET /me/professional/earnings → this month, totals by state, recent jobs
+  async earnings(@CurrentUser() user: JWTPayload) {
+    return this.bookings.earnings(await this.professionalId(user));
+  }
+
   @Get('bookings')
   async listBookings(@CurrentUser() user: JWTPayload) {
     return this.bookings.listForProfessional(await this.professionalId(user));

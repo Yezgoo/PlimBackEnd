@@ -71,9 +71,11 @@ export class ProfessionalsService {
 
   // Plain values for JSON: the date as "2027-12-31", the rating as a number.
   // Which admin reviewed the application stays internal.
-  private present({ reviewedBy: _reviewedBy, ...professional }: Professional) {
+  // So do the storage paths of the photo: the app only learns whether there is one.
+  private present({ reviewedBy: _reviewedBy, photoKey, photoUploadKey: _photoUploadKey, ...professional }: Professional) {
     return {
       ...professional,
+      hasPhoto: !!photoKey,
       insuranceValidUntil: professional.insuranceValidUntil?.toISOString().slice(0, 10) ?? null,
       ratingAvg: professional.ratingAvg === null ? null : Number(professional.ratingAvg),
     };

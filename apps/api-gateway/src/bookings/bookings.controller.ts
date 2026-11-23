@@ -5,7 +5,7 @@ import { CurrentUser } from '../auth/current-user.decorator.js';
 import { HumanCallerGuard } from '../auth/human-caller.guard.js';
 import { CatalogClient } from '../catalog/catalog.client.js';
 import { UsersClient } from '../users/users.client.js';
-import { BookingsClient, type BookingRequest, type ReviewedPrice } from './bookings.client.js';
+import { BookingsClient, type BookingRequest, type BookingStatus, type ReviewedPrice } from './bookings.client.js';
 import { PricingSettingsClient } from './pricing-settings.client.js';
 
 // What the app sends: which service, where and when. Never the price or the customer.
@@ -17,6 +17,10 @@ export type BookingInput = {
   couponCode?: string;
   reviewedPrice?: ReviewedPrice;
 };
+
+// A booking keeps its professional after cancellation or a refund, but the customer only needs
+// to know who is coming (or came) while the job is on.
+const SHOWS_PROFESSIONAL = new Set<BookingStatus>(['accepted', 'en_route', 'in_progress', 'done', 'confirmed', 'disputed']);
 
 // The customer's bookings. The app's four steps (service, address, date and time, summary) end in
 // POST /bookings/preview for the summary and POST /bookings to book.
@@ -50,6 +54,19 @@ export class BookingsController {
   @Get(':id')                                 // GET /bookings/<id> → one of my bookings, with its status history
   async find(@CurrentUser() user: JWTPayload, @Param('id') id: string) {
     return this.bookings.findForCustomer(id, await this.customerId(user));
+  }
+
+  // GET /bookings/<id>/professional → who is coming: name, photo, rating, finished jobs.
+  // Only once a professional has taken the booking, and only for the customer who made it.
+  @Get(':id/professional')
+  async assignedProfessional(@CurrentUser() user: JWTPayload, @Param('id', ParseUUIDPipe) id: string) {
+    const booking = await this.bookings.findForCustomer(id, await this.customerId(user));
+    if (!booking.professionalId || !SHOWS_PROFESSIONAL.has(booking.status)) return { professional: null };
+    const [profile, { completedJobs }] = await Promise.all([
+      this.users.publicProfessional(booking.professionalId),
+      this.bookings.completedJobs(booking.professionalId),
+    ]);
+    return { professional: { ...profile, completedJobs } };
   }
 
   @Post(':id/cancel')                         // POST /bookings/<id>/cancel → free or with the late fee agreed when booking

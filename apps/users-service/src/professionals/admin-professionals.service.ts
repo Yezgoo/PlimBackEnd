@@ -142,9 +142,10 @@ export class AdminProfessionalsService {
   }
 
   // Plain values for JSON, and never the storage path of a document
-  private present(professional: ProfessionalWithRelations) {
+  private present({ photoKey, photoUploadKey: _photoUploadKey, ...professional }: ProfessionalWithRelations) {
     return {
       ...professional,
+      hasPhoto: !!photoKey,
       insuranceValidUntil: professional.insuranceValidUntil?.toISOString().slice(0, 10) ?? null,
       ratingAvg: professional.ratingAvg === null ? null : Number(professional.ratingAvg),
       documents: professional.documents.map(({ fileKey: _fileKey, ...document }) => document),

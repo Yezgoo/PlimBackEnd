@@ -16,10 +16,12 @@ import { AdminBookingsController } from './admin-bookings.controller.js';
 import { DailyMetricsService } from './daily-metrics.service.js';
 import { PrivacyExportController } from './privacy-export.controller.js';
 import { InvoicesController } from './invoices.controller.js';
+import { EarningsController } from './earnings.controller.js';
+import { EarningsService } from './earnings.service.js';
 
 @Module({
   imports: [DatabaseModule],
-  controllers: [BookingsController, OffersController, BookingEmailsController, BookingPushController, DisputesController, AdminBookingsController, PrivacyExportController, InvoicesController],
-  providers: [BookingsService, CancellationService, OffersService, OffersSweeper, ProfessionalsDirectory, SettingsReader, DisputesService, DailyMetricsService],
+  controllers: [BookingsController, OffersController, BookingEmailsController, BookingPushController, DisputesController, AdminBookingsController, PrivacyExportController, InvoicesController, EarningsController],
+  providers: [BookingsService, CancellationService, OffersService, OffersSweeper, ProfessionalsDirectory, SettingsReader, DisputesService, DailyMetricsService, EarningsService],
 })
 export class BookingsModule {}

@@ -21,6 +21,11 @@ export class AdminProfessionalsController {
     return this.usersClient.adminFindProfessional(id);
   }
 
+  @Get(':id/photo-url')                       // short-lived link to check the photo customers will see
+  photoUrl(@Param('id') id: string) {
+    return this.usersClient.adminPhotoUrl(id);
+  }
+
   @Get(':id/documents/:documentId/download-url')   // short-lived link to look at a document
   documentDownloadUrl(@Param('id') id: string, @Param('documentId') documentId: string) {
     return this.usersClient.adminDocumentDownloadUrl(id, documentId);

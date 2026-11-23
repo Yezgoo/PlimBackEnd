@@ -20,6 +20,7 @@ model User {
   consents UserConsent[]
   deletionRequest AccountDeletionRequest?
   favorites UserFavorite[]
+  addresses SavedAddress[]
 
   @@map("users")
 }
@@ -43,6 +44,24 @@ model UserFavorite {
   @@id([userId, serviceSlug])
   @@index([userId, createdAt])
   @@map("user_favorites")
+}
+
+// An address the person chose to keep for their next bookings ("Casa", "Trabalho").
+// Bookings still copy the address when they are made, so editing or deleting one never changes a booking.
+model SavedAddress {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  label      String                                  // what the person calls it
+  street     String                                  // street and door number
+  details    String?                                 // floor, side, how to find the door
+  postalCode String   @map("postal_code")            // "3000-123"
+  city       String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("saved_addresses")
 }
 
 model AccountDeletionRequest {
@@ -84,6 +103,8 @@ model Professional {
   insurancePolicy     String?            @map("insurance_policy")     // civil liability insurance
   insuranceValidUntil DateTime?          @map("insurance_valid_until") @db.Date
   bio                 String?
+  photoKey            String?            @map("photo_key")            // profile photo shown to customers; a path in private storage
+  photoUploadKey      String?            @map("photo_upload_key")     // a photo upload link was issued for this path, not confirmed yet
   status              ProfessionalStatus @default(applied)
   verifiedAt          DateTime?          @map("verified_at")          // set on approval: the "Verificado" badge
   rejectionReason     String?            @map("rejection_reason")     // shown to the applicant

@@ -8,10 +8,11 @@ import { UsersClient } from './users.client.js';
 import { MePushController } from './me-push.controller.js';
 import { MePrivacyController } from './me-privacy.controller.js';
 import { MeFavoritesController } from './me-favorites.controller.js';
+import { MeAddressesController } from './me-addresses.controller.js';
 
 @Module({
   imports: [CatalogModule],
-  controllers: [MeController, MeProfessionalController, MeDocumentsController, MeWorkController, MePushController, MePrivacyController, MeFavoritesController],
+  controllers: [MeController, MeProfessionalController, MeDocumentsController, MeWorkController, MePushController, MePrivacyController, MeFavoritesController, MeAddressesController],
   providers: [UsersClient],
   exports: [UsersClient], // the admin module uses it too
 })

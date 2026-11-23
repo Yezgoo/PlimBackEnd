@@ -85,6 +85,16 @@ export type JobOffer = {
   };
 };
 
+export type EarningState = 'upcoming' | 'awaiting_confirmation' | 'disputed' | 'releasing' | 'paid';
+export type Earnings = {
+  currency: string;
+  thisMonth: { earnedCents: number; jobs: number };
+  totals: Record<EarningState, number> & { earnedCents: number };
+  completedJobs: number;
+  months: { month: string; earnedCents: number; jobs: number }[];
+  recent: { bookingId: string; serviceName: string; scheduledStart: string; amountCents: number; state: EarningState; paidAt: string | null }[];
+};
+
 // Talks to booking-service over plain HTTP.
 @Injectable()
 export class BookingsClient {
@@ -152,6 +162,14 @@ export class BookingsClient {
   cancelForProfessional(id: string, professionalId: string): Promise<{ id: string; released: boolean }> {
     const path = `/bookings/professional/${encodeURIComponent(id)}/cancel?professionalId=${encodeURIComponent(professionalId)}`;
     return this.request(path, { method: 'POST' });
+  }
+
+  earnings(professionalId: string): Promise<Earnings> {
+    return this.request(`/earnings?professionalId=${encodeURIComponent(professionalId)}`);
+  }
+
+  completedJobs(professionalId: string): Promise<{ completedJobs: number }> {
+    return this.request(`/earnings/completed-jobs?professionalId=${encodeURIComponent(professionalId)}`);
   }
 
   // --- job offers, as the professional sees them ---

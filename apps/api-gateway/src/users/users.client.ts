@@ -11,6 +11,9 @@ export type UserProfile = {
   updatedAt: string;
 };
 
+export type SavedAddress = { id: string; label: string; street: string; details: string | null; postalCode: string; city: string | null };
+export type SaveAddressInput = { label: string; street: string; details?: string; postalCode: string; city?: string };
+
 export type RegisterUserInput = { email: string; name?: string; phone?: string; privacyVersion?: string };
 export type UpdateUserInput = { name?: string; phone?: string };
 
@@ -27,7 +30,21 @@ export type ProfessionalProfile = {
   verifiedAt: string | null;
   ratingAvg: number | null;
   ratingCount: number;
+  hasPhoto: boolean;
 };
+
+// What a customer sees about the professional who took their booking
+export type PublicProfessional = {
+  id: string;
+  name: string | null;        // "Ana M."
+  bio: string | null;
+  photoUrl: string | null;    // short-lived signed link
+  verified: boolean;
+  ratingAvg: number | null;
+  ratingCount: number;
+  memberSince: string;        // "2026-11"
+};
+export type PhotoUploadTicket = { upload: { method: 'PUT'; url: string; headers: Record<string, string>; expiresInSeconds: number } };
 
 // users-service validates these and rejects any field that isn't listed (e.g. status)
 export type ApplyProfessionalInput = {
@@ -109,6 +126,18 @@ export class UsersClient {
     return this.request(`${this.userPath(auth0Id)}/favorites/${encodeURIComponent(serviceSlug)}`, { method: 'DELETE' });
   }
 
+  listAddresses(auth0Id: string): Promise<SavedAddress[]> {
+    return this.request(`${this.userPath(auth0Id)}/addresses`);
+  }
+
+  saveAddress(auth0Id: string, input: SaveAddressInput): Promise<SavedAddress> {
+    return this.request(`${this.userPath(auth0Id)}/addresses`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async deleteAddress(auth0Id: string, id: string): Promise<void> {
+    await this.request(`${this.userPath(auth0Id)}/addresses/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
   findProfessional(auth0Id: string): Promise<ProfessionalProfile> {
     return this.request(`${this.userPath(auth0Id)}/professional`);
   }
@@ -119,6 +148,28 @@ export class UsersClient {
 
   updateProfessional(auth0Id: string, input: UpdateProfessionalInput): Promise<ProfessionalProfile> {
     return this.request(`${this.userPath(auth0Id)}/professional`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  // --- profile photo: the app uploads to storage itself, with the signed link from requestPhotoUpload ---
+
+  requestPhotoUpload(auth0Id: string, input: { contentType: string; sizeBytes: number }): Promise<PhotoUploadTicket> {
+    return this.request(`${this.userPath(auth0Id)}/professional/photo`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  confirmPhotoUpload(auth0Id: string): Promise<{ hasPhoto: boolean }> {
+    return this.request(`${this.userPath(auth0Id)}/professional/photo/confirm`, { method: 'POST' });
+  }
+
+  photoUrl(auth0Id: string): Promise<{ url: string; expiresInSeconds: number }> {
+    return this.request(`${this.userPath(auth0Id)}/professional/photo/url`);
+  }
+
+  async deletePhoto(auth0Id: string): Promise<void> {
+    await this.request(`${this.userPath(auth0Id)}/professional/photo`, { method: 'DELETE' });
+  }
+
+  publicProfessional(professionalId: string): Promise<PublicProfessional> {
+    return this.request(`/professionals/${encodeURIComponent(professionalId)}/public`);
   }
 
   // --- verification documents: the app uploads to storage itself, with the signed link from requestUpload ---
@@ -185,6 +236,10 @@ export class UsersClient {
 
   adminDocumentDownloadUrl(id: string, documentId: string): Promise<{ url: string; expiresInSeconds: number }> {
     return this.request(`${this.adminPath(id)}/documents/${encodeURIComponent(documentId)}/download-url`);
+  }
+
+  adminPhotoUrl(id: string): Promise<{ url: string; expiresInSeconds: number }> {
+    return this.request(`${this.adminPath(id)}/photo-url`);
   }
 
   adminReviewDocument(adminId: string, id: string, documentId: string, input: ReviewDocumentInput): Promise<AdminProfessional> {
