@@ -11,6 +11,6 @@ async function bootstrap() {
     origin: (process.env.CORS_ORIGINS ?? 'http://localhost:8081').split(','),
   });
 
-  await app.listen(process.env.GATEWAY_PORT ?? 3000);
+  await app.listen(process.env.PORT ?? process.env.GATEWAY_PORT ?? 3000,'0.0.0.0',);
 }
 await bootstrap();
